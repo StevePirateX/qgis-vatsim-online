@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>232</width>
-    <height>201</height>
+    <height>202</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,6 +15,27 @@
   </property>
   <widget class="QWidget" name="dockWidgetContents">
    <layout class="QGridLayout" name="gridLayout">
+    <item row="5" column="0">
+     <widget class="QLabel" name="lblDebug">
+      <property name="text">
+       <string>Debug</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="lblHideVatsimId">
+      <property name="text">
+       <string>Hide VATSIM ID?</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0" colspan="2">
+     <widget class="QPushButton" name="btnGetData">
+      <property name="text">
+       <string>Get VATSIM Data</string>
+      </property>
+     </widget>
+    </item>
     <item row="3" column="1">
      <widget class="QSpinBox" name="spnVatsimId">
       <property name="toolTip">
@@ -40,10 +61,30 @@
       </property>
      </widget>
     </item>
-    <item row="2" column="0">
-     <widget class="QLabel" name="lblHideVatsimId">
+    <item row="1" column="1">
+     <widget class="QSpinBox" name="spnRefreshRate">
+      <property name="suffix">
+       <string> secs</string>
+      </property>
+      <property name="minimum">
+       <number>15</number>
+      </property>
+      <property name="maximum">
+       <number>600</number>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="1">
+     <widget class="QCheckBox" name="chkDebug">
       <property name="text">
-       <string>Hide VATSIM ID?</string>
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="lblRefreshRate">
+      <property name="text">
+       <string>Refresh Rate</string>
       </property>
      </widget>
     </item>
@@ -67,50 +108,56 @@
       </property>
      </widget>
     </item>
-    <item row="5" column="0" colspan="2">
-     <widget class="QPushButton" name="btnGetData">
-      <property name="text">
-       <string>Get VATSIM Data</string>
+    <item row="4" column="1">
+     <widget class="QgsColorButton" name="mColorButton">
+      <property name="colorDialogTitle">
+       <string>Select Color</string>
       </property>
-     </widget>
-    </item>
-    <item row="1" column="0">
-     <widget class="QLabel" name="lblRefreshRate">
-      <property name="text">
-       <string>Refresh Rate</string>
+      <property name="color">
+       <color>
+        <red>59</red>
+        <green>108</green>
+        <blue>235</blue>
+       </color>
       </property>
-     </widget>
-    </item>
-    <item row="1" column="1">
-     <widget class="QSpinBox" name="spnRefreshRate">
-      <property name="suffix">
-       <string> secs</string>
+      <property name="allowOpacity">
+       <bool>true</bool>
       </property>
-      <property name="minimum">
-       <number>15</number>
+      <property name="showMenu">
+       <bool>true</bool>
       </property>
-      <property name="maximum">
-       <number>600</number>
+      <property name="behavior">
+       <enum>QgsColorButton::ShowDialog</enum>
+      </property>
+      <property name="defaultColor">
+       <color>
+        <red>59</red>
+        <green>108</green>
+        <blue>235</blue>
+       </color>
+      </property>
+      <property name="showNoColor">
+       <bool>false</bool>
       </property>
      </widget>
     </item>
     <item row="4" column="0">
-     <widget class="QLabel" name="lblDebug">
+     <widget class="QLabel" name="label">
       <property name="text">
-       <string>Debug</string>
-      </property>
-     </widget>
-    </item>
-    <item row="4" column="1">
-     <widget class="QCheckBox" name="chkDebug">
-      <property name="text">
-       <string/>
+       <string>Colour</string>
       </property>
      </widget>
     </item>
    </layout>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsColorButton</class>
+   <extends>QToolButton</extends>
+   <header>qgscolorbutton.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>

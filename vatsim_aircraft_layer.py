@@ -23,7 +23,7 @@ from .vatsim_pilot import VatsimPilot
 
 
 class VatsimAircraftLayer:
-    def __init__(self, layer_name="VATSIM Data", crs="EPSG:4326", svg_name="aircraft.svg"):
+    def __init__(self, aircraft_colour: QColor, layer_name="VATSIM Data", crs="EPSG:4326", svg_name="aircraft.svg", ):
         """Initialize a memory layer for live point updates."""
         self.layer = QgsVectorLayer(f"Point?crs={crs}", layer_name, "memory")
         self.pr = self.layer.dataProvider()
@@ -54,14 +54,14 @@ class VatsimAircraftLayer:
 
         QgsProject.instance().addMapLayer(self.layer)
         self.features = {}  # Dictionary to track features by CID
-        self._apply_default_style()
+        self._apply_default_style(aircraft_colour=aircraft_colour)
 
-    def _apply_default_style(self, colour: QColor=QColor(59,108,235)):
+    def _apply_default_style(self, aircraft_colour: QColor):
         """Set a visual style (blue arrow for heading)."""
         symbol = QgsMarkerSymbol()
         svg_layer = QgsSvgMarkerSymbolLayer(self.svg_path)
         svg_layer.setSize(8)
-        svg_layer.setColor(colour)
+        svg_layer.setColor(aircraft_colour)
         symbol.changeSymbolLayer(0, svg_layer)
         rotation_property = QgsProperty.fromExpression("heading + 90")
         symbol.symbolLayer(0).setDataDefinedProperty(
@@ -82,7 +82,7 @@ class VatsimAircraftLayer:
         # 2. Text formatting
         text_format = QgsTextFormat()
         text_format.setFont(QFont("Arial", 8, QFont.Bold))
-        text_format.setColor(colour)
+        text_format.setColor(aircraft_colour)
 
         # Add text buffer (black outline)
         buffer_settings = QgsTextBufferSettings()

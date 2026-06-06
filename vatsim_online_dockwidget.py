@@ -24,6 +24,7 @@
 
 import os
 
+from PyQt5.QtGui import QColor
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis._core import QgsMessageLog, Qgis
@@ -35,6 +36,7 @@ from .update_data_thread import VatsimUpdateThread
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'vatsim_online_dockwidget_base.ui'))
 
+DEFAULT_COLOUR= QColor(59, 108, 235)
 
 class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
@@ -137,6 +139,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.spnRefreshRate.setEnabled(not self.is_updating)
         self.chkHideVatsimId.setEnabled(not self.is_updating)
         self.spnVatsimId.setEnabled(not self.is_updating)
+        self.mColorButton.setEnabled(not self.is_updating)
         self.chkDebug.setEnabled(not self.is_updating)
 
         button_text = "Stop Updating" if self.is_updating else "Get Data"
@@ -146,4 +149,4 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if not self.is_updating:
             self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
-        self.vatsim_layer = VatsimAircraftLayer() if self.is_updating else None
+        self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color()) if self.is_updating else None
