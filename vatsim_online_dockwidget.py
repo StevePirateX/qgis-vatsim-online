@@ -34,7 +34,7 @@ from .vatsim_data import VatsimData
 from .update_data_thread import VatsimUpdateThread
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'vatsim_online_dockwidget_base.ui'))
+    str(os.path.dirname(__file__)), 'vatsim_online_dockwidget_base.ui'))
 
 class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
