@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/plugins/vatsim_online" >
+        <file>icon.png</file>
+        <file>aircraft.svg</file>
+    </qresource>
+</RCC>
