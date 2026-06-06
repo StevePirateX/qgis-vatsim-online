@@ -24,7 +24,6 @@
 
 import os
 
-from PyQt5.QtCore import QTimer
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis._core import QgsMessageLog, Qgis
@@ -56,8 +55,6 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.vatsim_data = VatsimData(self.vatsim_data_url)
         self.fetching_data = False
         self.vatsim_layer = None
-        self.refresh_timer = QTimer()
-        # self.refresh_timer.timeout.connect(self.refresh_vatsim_data)
         self.update_thread = None
         self.is_updating = False
         self.debug = self.chkDebug.isChecked()
