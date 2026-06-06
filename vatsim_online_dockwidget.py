@@ -36,8 +36,6 @@ from .update_data_thread import VatsimUpdateThread
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'vatsim_online_dockwidget_base.ui'))
 
-DEFAULT_COLOUR= QColor(59, 108, 235)
-
 class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     closingPlugin = pyqtSignal()
@@ -61,6 +59,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.is_updating = False
         self.debug = self.chkDebug.isChecked()
         self.hidden_vatsim_id = self.spnVatsimId.value()
+
 
     def closeEvent(self, event, **kwargs):
         if self.is_updating:
