@@ -1,8 +1,8 @@
 from typing import List
 import os
 
-from PyQt5.QtCore import QMetaType
-from PyQt5.QtGui import QFont
+from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtGui import QFont
 from qgis._core import QgsSymbolLayer, QgsProperty, QgsPalLayerSettings, QgsTextFormat, QgsTextBufferSettings, \
     QgsVectorLayerSimpleLabeling
 from qgis.core import (
