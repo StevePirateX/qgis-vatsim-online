@@ -47,7 +47,8 @@ class VatsimAircraftLayer:
             QgsField("arrival", QMetaType.Type.QString),
             QgsField("aircraft", QMetaType.Type.QString),
             QgsField("cruise", QMetaType.Type.QString),
-            QgsField("route", QMetaType.Type.QString)
+            QgsField("route", QMetaType.Type.QString),
+            QgsField("timestamp", QMetaType.Type.QDateTime)
         ]
         self.pr.addAttributes(self.fields)
         self.layer.updateFields()
