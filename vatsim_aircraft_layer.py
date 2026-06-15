@@ -1,7 +1,7 @@
 from typing import List
 import os
 
-from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtCore import QMetaType, QDateTime
 from qgis.PyQt.QtGui import QFont
 from qgis._core import QgsSymbolLayer, QgsProperty, QgsPalLayerSettings, QgsTextFormat, QgsTextBufferSettings, \
     QgsVectorLayerSimpleLabeling
@@ -128,6 +128,7 @@ class VatsimAircraftLayer:
                 self.pr.truncate()
 
                 # Add fresh features for all current pilots
+                timestamp = QDateTime.currentDateTime()
                 features = []
                 for pilot in pilots:
                     if pilot.cid == hidden_vatsim_id:
@@ -153,7 +154,8 @@ class VatsimAircraftLayer:
                         pilot.arrival,
                         pilot.aircraft,
                         pilot.cruise,
-                        pilot.route
+                        pilot.route,
+                        timestamp
                     ])
                     features.append(feat)
 
