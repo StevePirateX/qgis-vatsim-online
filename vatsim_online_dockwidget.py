@@ -55,6 +55,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.vatsim_data = VatsimData(self.vatsim_data_url)
         self.fetching_data = False
         self.vatsim_layer = None
+        self.history_layer = None
         self.update_thread = None
         self.is_updating = False
         self.debug = self.chkDebug.isChecked()
@@ -97,6 +98,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.vatsim_data,
             self.vatsim_layer,
             refresh_rate,
+            self.history_layer,
             hidden_vatsim_id,
             self.debug
         )
@@ -148,4 +150,5 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if not self.is_updating:
             self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
-        self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color()) if self.is_updating else None
+        self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
+        self.history_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="History Layer", save_history=True) if self.is_updating else None
