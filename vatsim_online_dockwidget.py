@@ -141,6 +141,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.chkHideVatsimId.setEnabled(not self.is_updating)
         self.spnVatsimId.setEnabled(not self.is_updating)
         self.mColorButton.setEnabled(not self.is_updating)
+        self.chkHistory.setEnabled(not self.is_updating)
+        self.mHistoryFile.setEnabled(not self.is_updating)
         self.chkDebug.setEnabled(not self.is_updating)
 
         button_text = "Stop Updating" if self.is_updating else "Get Data"

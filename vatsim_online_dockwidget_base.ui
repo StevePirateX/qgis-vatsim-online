@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>232</width>
-    <height>202</height>
+    <height>291</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,21 +15,14 @@
   </property>
   <widget class="QWidget" name="dockWidgetContents">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="5" column="0">
-     <widget class="QLabel" name="lblDebug">
-      <property name="text">
-       <string>Debug</string>
+    <item row="5" column="0" colspan="2">
+     <widget class="Line" name="line_2">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>
-    <item row="2" column="0">
-     <widget class="QLabel" name="lblHideVatsimId">
-      <property name="text">
-       <string>Hide VATSIM ID?</string>
-      </property>
-     </widget>
-    </item>
-    <item row="6" column="0" colspan="2">
+    <item row="10" column="0" colspan="2">
      <widget class="QPushButton" name="btnGetData">
       <property name="text">
        <string>Get VATSIM Data</string>
@@ -61,6 +54,20 @@
       </property>
      </widget>
     </item>
+    <item row="9" column="1">
+     <widget class="QCheckBox" name="chkDebug">
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="0" colspan="2">
+     <widget class="Line" name="line">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </item>
     <item row="1" column="1">
      <widget class="QSpinBox" name="spnRefreshRate">
       <property name="suffix">
@@ -74,24 +81,10 @@
       </property>
      </widget>
     </item>
-    <item row="5" column="1">
-     <widget class="QCheckBox" name="chkDebug">
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
     <item row="1" column="0">
      <widget class="QLabel" name="lblRefreshRate">
       <property name="text">
        <string>Refresh Rate</string>
-      </property>
-     </widget>
-    </item>
-    <item row="3" column="0">
-     <widget class="QLabel" name="lblVatsimId">
-      <property name="text">
-       <string>VATSIM ID</string>
       </property>
      </widget>
     </item>
@@ -105,6 +98,34 @@
       </property>
       <property name="text">
        <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="9" column="0">
+     <widget class="QLabel" name="lblDebug">
+      <property name="text">
+       <string>Debug</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="lblHideVatsimId">
+      <property name="text">
+       <string>Hide VATSIM ID?</string>
+      </property>
+     </widget>
+    </item>
+    <item row="7" column="0">
+     <widget class="QLabel" name="label_2">
+      <property name="text">
+       <string>Data File</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="lblVatsimId">
+      <property name="text">
+       <string>VATSIM ID</string>
       </property>
      </widget>
     </item>
@@ -148,6 +169,36 @@
       </property>
      </widget>
     </item>
+    <item row="7" column="1">
+     <widget class="QgsFileWidget" name="mHistoryFile">
+      <property name="acceptDrops">
+       <bool>true</bool>
+      </property>
+      <property name="fileWidgetButtonVisible">
+       <bool>true</bool>
+      </property>
+      <property name="dialogTitle">
+       <string>Save to GeoPackage</string>
+      </property>
+      <property name="storageMode">
+       <enum>QgsFileWidget::SaveFile</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="1">
+     <widget class="QCheckBox" name="chkHistory">
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0">
+     <widget class="QLabel" name="label_3">
+      <property name="text">
+       <string>Record Data</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
  </widget>
@@ -156,6 +207,11 @@
    <class>QgsColorButton</class>
    <extends>QToolButton</extends>
    <header>qgscolorbutton.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsFileWidget</class>
+   <extends>QWidget</extends>
+   <header>qgsfilewidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
