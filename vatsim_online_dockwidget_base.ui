@@ -180,8 +180,14 @@
       <property name="dialogTitle">
        <string>Save to GeoPackage</string>
       </property>
+      <property name="filter">
+       <string>GeoPackage (*.gpkg, *.GPKG)</string>
+      </property>
       <property name="storageMode">
        <enum>QgsFileWidget::SaveFile</enum>
+      </property>
+      <property name="options">
+       <set>QFileDialog::DontConfirmOverwrite</set>
       </property>
      </widget>
     </item>
