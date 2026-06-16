@@ -41,10 +41,11 @@ FIELDS = [
 ]
 
 class VatsimAircraftLayer:
-    def __init__(self, aircraft_colour: QColor, layer_name: str, crs="EPSG:4326", svg_name="aircraft.svg", save_history=False):
+    def __init__(self, aircraft_colour: QColor, layer_name: str, crs="EPSG:4326", svg_name="aircraft.svg", save_history: bool=False):
         """Initialize a memory layer for live point updates."""
         self.layer = QgsVectorLayer(f"Point?crs={crs}", layer_name, "memory")
         self.pr = self.layer.dataProvider()
+        self.save_history = save_history
 
         plugin_dir = os.path.dirname(__file__)  # Path to psx_vector_layer.py
         self.svg_path = os.path.join(plugin_dir, svg_name)
@@ -58,7 +59,6 @@ class VatsimAircraftLayer:
         self.features = {}  # Dictionary to track features by CID
         self._apply_default_style(aircraft_colour=aircraft_colour)
 
-        self.save_history = save_history
 
     def _apply_default_style(self, aircraft_colour: QColor):
         """Set a visual style (blue arrow for heading)."""
@@ -104,12 +104,12 @@ class VatsimAircraftLayer:
 
         # Apply labeling
         self.layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
-        self.layer.setLabelsEnabled(True)
+        self.layer.setLabelsEnabled(not self.save_history)
 
         # Force visibility and style sync
         tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
         if tree_layer:
-            tree_layer.setItemVisibilityChecked(True)
+            tree_layer.setItemVisibilityChecked(not self.save_history)
 
         # Mark layer as modified to force refresh
         self.layer.triggerRepaint()
