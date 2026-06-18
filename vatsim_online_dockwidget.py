@@ -29,6 +29,7 @@ from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis._core import QgsMessageLog, Qgis
 
+from.history_layer import HistoryLayer
 from .vatsim_aircraft_layer import VatsimAircraftLayer
 from .vatsim_data import VatsimData
 from .update_data_thread import VatsimUpdateThread
@@ -153,4 +154,4 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         if not self.is_updating:
             self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
-        self.history_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="History Layer", save_history=True) if self.is_updating else None
+        self.history_layer = HistoryLayer() if self.is_updating else None

@@ -21,26 +21,26 @@ from qgis.PyQt.QtGui import QColor
 
 from .vatsim_pilot import VatsimPilot
 
-FIELDS = [
-    QgsField("callsign", QMetaType.Type.QString),
-    QgsField("cid", QMetaType.Type.Int),
-    QgsField("pilot", QMetaType.Type.QString),
-    QgsField("latitude", QMetaType.Type.QString),
-    QgsField("longitude", QMetaType.Type.QString),
-    QgsField("altitude", QMetaType.Type.Int),
-    QgsField("heading", QMetaType.Type.Int),
-    QgsField("groundspeed", QMetaType.Type.Int),
-    QgsField("transponder", QMetaType.Type.QString),
-    QgsField("server", QMetaType.Type.QString),
-    QgsField("departure", QMetaType.Type.QString),
-    QgsField("arrival", QMetaType.Type.QString),
-    QgsField("aircraft", QMetaType.Type.QString),
-    QgsField("cruise", QMetaType.Type.QString),
-    QgsField("route", QMetaType.Type.QString),
-    QgsField("timestamp", QMetaType.Type.QDateTime)
-]
-
 class VatsimAircraftLayer:
+    FIELDS = [
+        QgsField("callsign", QMetaType.Type.QString),
+        QgsField("cid", QMetaType.Type.Int),
+        QgsField("pilot", QMetaType.Type.QString),
+        QgsField("latitude", QMetaType.Type.QString),
+        QgsField("longitude", QMetaType.Type.QString),
+        QgsField("altitude", QMetaType.Type.Int),
+        QgsField("heading", QMetaType.Type.Int),
+        QgsField("groundspeed", QMetaType.Type.Int),
+        QgsField("transponder", QMetaType.Type.QString),
+        QgsField("server", QMetaType.Type.QString),
+        QgsField("departure", QMetaType.Type.QString),
+        QgsField("arrival", QMetaType.Type.QString),
+        QgsField("aircraft", QMetaType.Type.QString),
+        QgsField("cruise", QMetaType.Type.QString),
+        QgsField("route", QMetaType.Type.QString),
+        QgsField("timestamp", QMetaType.Type.QDateTime)
+    ]
+
     def __init__(self, aircraft_colour: QColor, layer_name: str, crs="EPSG:4326", svg_name="aircraft.svg", save_history=False):
         """Initialize a memory layer for live point updates."""
         self.layer = QgsVectorLayer(f"Point?crs={crs}", layer_name, "memory")
@@ -50,7 +50,7 @@ class VatsimAircraftLayer:
         self.svg_path = os.path.join(plugin_dir, svg_name)
 
         # Define all attributes (expanded for VATSIM data)
-        self.fields = FIELDS
+        self.fields = VatsimAircraftLayer.FIELDS
         self.pr.addAttributes(self.fields)
         self.layer.updateFields()
 
