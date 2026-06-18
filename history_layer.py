@@ -1,7 +1,9 @@
 import os
 
-from qgis.PyQt.QtCore import QMetaType
-from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVectorFileWriter
+from PyQt5.QtGui import QColor, QFont
+from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVectorFileWriter, QgsMarkerSymbol, \
+    QgsSvgMarkerSymbolLayer, QgsSymbolLayer, QgsProperty, QgsSingleSymbolRenderer, QgsPalLayerSettings, QgsTextFormat, \
+    QgsTextBufferSettings, QgsVectorLayerSimpleLabeling
 
 from .vatsim_aircraft_layer import VatsimAircraftLayer
 
@@ -9,7 +11,7 @@ TABLE_NAME = 'vatsim_history'
 PRETTY_NAME = "VATSIM History"
 
 class HistoryLayer:
-    def __init__(self, gpkg_path: str=None, table_name=TABLE_NAME, pretty_name: str=PRETTY_NAME, crs="EPSG:4326"):
+    def __init__(self, gpkg_path: str=None, table_name=TABLE_NAME, pretty_name: str=PRETTY_NAME, crs="EPSG:4326", svg_name: str="aircraft.svg"):
         """
         Initialise the history layer
 
@@ -27,6 +29,9 @@ class HistoryLayer:
         self.pretty_name = pretty_name
         self.crs = crs
 
+        plugin_dir = os.path.dirname(__file__)  # Path to psx_vector_layer.py
+        self.svg_path = os.path.join(plugin_dir, svg_name)
+
         # Ensure .gpkg extension
         if not self.gpkg_path.lower().endswith('.gpkg'):
            self.gpkg_path += '.gpkg'
@@ -40,7 +45,7 @@ class HistoryLayer:
         else:
             self.layer = self._load_or_create_layer(crs)
             QgsProject.instance().addMapLayer(self.layer)
-            #self._apply_default_style()
+            self._apply_default_style()
 
         # Initialize feature tracking
         self.current_feature = None
@@ -96,6 +101,61 @@ class HistoryLayer:
             raise RuntimeError(f"Failed to create GeoPackage layer: {error[1]}")
 
         return QgsVectorLayer(f"{self.gpkg_path}|layername={self.table_name}", self.pretty_name, "ogr")
+
+    def _apply_default_style(self, aircraft_colour: QColor=QColor(0,255,255)):
+        """Set a visual style (blue arrow for heading)."""
+        symbol = QgsMarkerSymbol()
+        svg_layer = QgsSvgMarkerSymbolLayer(self.svg_path)
+        svg_layer.setSize(8)
+        svg_layer.setColor(aircraft_colour)
+        symbol.changeSymbolLayer(0, svg_layer)
+        rotation_property = QgsProperty.fromExpression("heading + 90")
+        symbol.symbolLayer(0).setDataDefinedProperty(
+            QgsSymbolLayer.Property.Angle,
+            rotation_property
+        )
+
+        self.renderer = QgsSingleSymbolRenderer(symbol)
+        self.layer.setRenderer(self.renderer)
+
+        """Configure default label styling for the layer."""
+        label_settings = QgsPalLayerSettings()
+
+        # 1. Label content (using 'id' and 'speed' fields)
+        label_settings.fieldName = "concat(callsign, \'\\n\', lpad(altitude//100,3,0), \'   \', lpad(groundspeed//10,2,0))"
+        label_settings.isExpression = True
+
+        # 2. Text formatting
+        text_format = QgsTextFormat()
+        text_format.setFont(QFont("Arial", 8, QFont.Bold))
+        text_format.setColor(aircraft_colour)
+
+        # Add text buffer (black outline)
+        buffer_settings = QgsTextBufferSettings()
+        buffer_settings.setEnabled(True)
+        buffer_settings.setSize(0.8)
+        buffer_settings.setColor(QColor(0, 0, 0))
+        text_format.setBuffer(buffer_settings)
+
+        label_settings.setFormat(text_format)
+
+        # 3. Label placement
+        # label_settings.placement = QgsPalLayerSettings.AroundPoint
+        label_settings.dist = 5.0  # 2mm offset from point
+        label_settings.quadOffset = QgsPalLayerSettings.QuadrantLeft  # Left side
+
+        # Apply labeling
+        self.layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
+        self.layer.setLabelsEnabled(False)
+
+        # Force visibility and style sync
+        tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
+        if tree_layer:
+            tree_layer.setItemVisibilityChecked(False)
+
+        # Mark layer as modified to force refresh
+        self.layer.triggerRepaint()
+        self.layer.reload()
 
 
 
