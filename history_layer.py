@@ -1,10 +1,14 @@
 import os
+from typing import List
 
+from PyQt5.QtCore import QDateTime
 from PyQt5.QtGui import QColor, QFont
 from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVectorFileWriter, QgsMarkerSymbol, \
     QgsSvgMarkerSymbolLayer, QgsSymbolLayer, QgsProperty, QgsSingleSymbolRenderer, QgsPalLayerSettings, QgsTextFormat, \
-    QgsTextBufferSettings, QgsVectorLayerSimpleLabeling
+    QgsTextBufferSettings, QgsVectorLayerSimpleLabeling, QgsFeature, QgsGeometry, QgsPoint
+from qgis.core import edit
 
+from .vatsim_pilot import VatsimPilot
 from .vatsim_aircraft_layer import VatsimAircraftLayer
 
 TABLE_NAME = 'vatsim_history'
@@ -48,6 +52,7 @@ class HistoryLayer:
             self._apply_default_style()
 
         # Initialize feature tracking
+        self.pr = self.layer.dataProvider()
         self.current_feature = None
         self.points = []
 
@@ -156,6 +161,53 @@ class HistoryLayer:
         # Mark layer as modified to force refresh
         self.layer.triggerRepaint()
         self.layer.reload()
+
+    def add_pilot_positions(self, pilots: List[VatsimPilot]):
+        try:
+            with edit(self.layer):
+                timestamp = QDateTime.currentDateTime()
+
+                features = []
+                for pilot in pilots:
+                    feat = QgsFeature()
+                    feat.setGeometry(QgsGeometry.fromPoint(
+                        QgsPoint(pilot.longitude, pilot.latitude, pilot.altitude)
+                    ))
+                    # Set basic attributes (no flight plan data)
+                    feat.setAttributes([
+                        None,
+                        pilot.callsign,
+                        pilot.cid,
+                        pilot.name,
+                        pilot.latitude,
+                        pilot.longitude,
+                        pilot.altitude,
+                        pilot.heading,
+                        pilot.groundspeed,
+                        pilot.transponder,
+                        pilot.server,
+                        pilot.departure,
+                        pilot.arrival,
+                        pilot.aircraft,
+                        pilot.cruise,
+                        pilot.route,
+                        timestamp
+                    ])
+                    features.append(feat)
+
+                self.pr.addFeatures(features)
+            self.layer.triggerRepaint()
+            #self.layer.dataProvider().reloadData()
+
+            return True
+
+        except Exception as e:
+            print(f"Error during full refresh: {e}")
+            return False
+
+    def remove_layer(self):
+        """Remove the layer from QGIS."""
+        QgsProject.instance().removeMapLayer(self.layer.id())
 
 
 

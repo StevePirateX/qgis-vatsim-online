@@ -56,8 +56,8 @@ class VatsimUpdateThread(QThread):
                 result = self.vatsim_layer.full_refresh(self.vatsim_data.pilots, self.hidden_vatsim_id)
                 if result and self.debug:
                     self.log_message.emit("Update complete", Qgis.MessageLevel.Success)
-                #if self.history_layer is not None:
-                    #self.history_layer.full_refresh(self.vatsim_data.pilots)
+                if self.history_layer is not None:
+                    self.history_layer.add_pilot_positions(self.vatsim_data.pilots)
                 return result
             finally:
                 self._mutex.unlock()
