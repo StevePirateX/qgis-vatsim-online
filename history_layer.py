@@ -16,14 +16,14 @@ PRETTY_NAME = "VATSIM History"
 
 class HistoryLayer:
     FIELDS = [
-        QgsField("callsign", QMetaType.QString),
+        QgsField("callsign", QMetaType.QString, len=8),
         QgsField("cid", QMetaType.Int),
         QgsField("heading", QMetaType.Int),
         QgsField("groundspeed", QMetaType.Int),
         QgsField("departure", QMetaType.QString, len=4),
         QgsField("arrival", QMetaType.QString, len=4),
         QgsField("aircraft", QMetaType.QString, len=8),
-        QgsField("cruise", QMetaType.QString, len=7),
+        QgsField("cruise", QMetaType.QString, len=5),
         QgsField("timestamp", QMetaType.QDateTime)
     ]
 
