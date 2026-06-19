@@ -214,5 +214,14 @@ class HistoryLayer:
         """Remove the layer from QGIS."""
         QgsProject.instance().removeMapLayer(self.layer.id())
 
+    def create_spatial_index(self):
+        if self.layer.isEditable():
+            self.layer.commitChanges()
+
+        # Create the spatial index via the data provider
+        success = self.layer.dataProvider().createSpatialIndex()
+        if success:
+            self.layer.triggerRepaint()
+
 
 
