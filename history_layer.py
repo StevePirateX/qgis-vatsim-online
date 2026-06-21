@@ -23,7 +23,6 @@ class HistoryLayer:
         QgsField("departure", QMetaType.QString, len=4),
         QgsField("arrival", QMetaType.QString, len=4),
         QgsField("aircraft", QMetaType.QString, len=8),
-        QgsField("cruise", QMetaType.QString, len=5),
         QgsField("timestamp", QMetaType.QDateTime)
     ]
 
@@ -195,7 +194,6 @@ class HistoryLayer:
                         pilot.departure,
                         pilot.arrival,
                         pilot.aircraft,
-                        pilot.cruise,
                         timestamp
                     ])
                     features.append(feat)
