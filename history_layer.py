@@ -217,9 +217,10 @@ class HistoryLayer:
             self.layer.commitChanges()
 
         # Create the spatial index via the data provider
-        success = self.layer.dataProvider().createSpatialIndex()
-        if success:
-            self.layer.triggerRepaint()
+        if not self.layer.dataProvider().hasSpatialIndex():
+            self.layer.dataProvider().createSpatialIndex()
+
+        self.layer.triggerRepaint()
 
 
 
