@@ -73,6 +73,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def debug_update(self):
         self.debug = self.chkDebug.isChecked()
 
+    def history_be_recorded(self) -> bool:
+        return self.chkHistory.isChecked()
 
     def on_btn_get_data_released(self):
         """Toggle between start/stop updating."""
@@ -154,5 +156,10 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         if not self.is_updating:
             self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
             self.history_layer.create_spatial_index()
+
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
-        self.history_layer = HistoryLayer() if self.is_updating else None
+
+        if self.history_be_recorded() and self.is_updating:
+            self.history_layer = HistoryLayer()
+        else:
+            self.history_layer = None
