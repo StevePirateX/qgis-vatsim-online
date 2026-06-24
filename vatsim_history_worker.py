@@ -118,10 +118,31 @@ def save_to_gpkg(pilots):
     # Close the datasource
     ds = None
 
+def run_process():
+    start = time.time()
+    pilots = get_vatsim_data()
+    save_to_gpkg(pilots)
+    end = time.time()
+    print(f"VATSIM Data fetched at {vatsim_data.get_fetch_time()} and saved {len(pilots)} pilots. Runtime: {end-start:.2f} secs")
 
-start = time.time()
-pilots = get_vatsim_data()
-save_to_gpkg(pilots)
-end = time.time()
-print(f"VATSIM Data fetched at {vatsim_data.get_fetch_time()} and saved {len(pilots)}: {end-start:.2f} secs")
+# ---------- Continuous loop ----------
+import signal
 
+def graceful_exit(signum, frame):
+    print("\nShutting down gracefully...")
+    sys.exit(0)
+
+# Catch Ctrl+C (SIGINT) to exit cleanly
+signal.signal(signal.SIGINT, graceful_exit)
+
+print("Recording started – fetching every 15 seconds. Press Ctrl+C to stop.")
+
+while True:
+    try:
+        run_process()
+    except Exception as e:
+        # Log the error and continue – don't crash the loop
+        print(f"Error during cycle: {e}", file=sys.stderr)
+
+    # Wait 15 seconds until the next fetch
+    time.sleep(15)
