@@ -97,7 +97,7 @@ def save_to_gpkg(pilots):
                 "departure": pilot.departure,
                 "arrival": pilot.arrival,
                 "aircraft": pilot.aircraft,
-                "timestamp": timestamp,
+                "timestamp": vatsim_data.get_update_time(),
             }
             for col_name, value in attr_map.items():
                 if col_name in field_indices:
@@ -123,7 +123,7 @@ def run_process():
     pilots = get_vatsim_data()
     save_to_gpkg(pilots)
     end = time.time()
-    print(f"VATSIM Data fetched at {vatsim_data.get_fetch_time()} and saved {len(pilots)} pilots. Runtime: {end-start:.2f} secs")
+    print(f"VATSIM Data fetched at {vatsim_data.get_update_time()} and saved {len(pilots)} pilots. Runtime: {end-start:.2f} secs")
 
 # ---------- Continuous loop ----------
 import signal

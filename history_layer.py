@@ -174,10 +174,9 @@ class HistoryLayer:
         self.layer.triggerRepaint()
         self.layer.reload()
 
-    def add_pilot_positions(self, pilots: List[VatsimPilot]):
+    def add_pilot_positions(self, pilots: List[VatsimPilot], timestamp):
         try:
             with edit(self.layer):
-                timestamp = QDateTime.currentDateTime()
 
                 features = []
                 for pilot in pilots:

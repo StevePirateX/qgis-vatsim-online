@@ -1,7 +1,7 @@
+from datetime import datetime
 from typing import List
 
 import requests
-from datetime import datetime
 from .vatsim_pilot import VatsimPilot
 
 class VatsimData:
@@ -15,14 +15,13 @@ class VatsimData:
     def fetch_vatsim_data(self):
         """Fetch VATSIM data from the given URL"""
         # Get current timestamp
-        self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        #print(f"VATSIM Data Processing - {self.timestamp}")
-
         try:
             response = requests.get(self.vatsim_data_url)
             response.raise_for_status()  # Raise an exception for HTTP errors
             self.data = response.json()
             #print(f"Total connected pilots: {len(self.data['pilots'])}\n")
+            update_time = self.data['general']['update_timestamp']  # Example: "2026-06-24T11:29:42.8324524Z"
+            self.timestamp = datetime.fromisoformat(update_time.replace('Z', '+00:00'))
             self.process_pilots()
             return None
         except requests.exceptions.RequestException as e:
@@ -35,5 +34,5 @@ class VatsimData:
     def get_pilot(self, index: int=0):
         return self.pilots[index].callsign, self.pilots[index].get_position()
 
-    def get_fetch_time(self):
-        return self.timestamp
+    def get_update_time(self):
+        return self.timestamp.strftime('%Y-%m-%dT%H:%M:%S.%f') + '+00:00'
