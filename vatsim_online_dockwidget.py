@@ -161,7 +161,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if not self.is_updating:
             self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
-            self.history_layer.create_spatial_index()
+            self.history_layer.create_spatial_index() if self.history_be_recorded() else None
 
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
 
