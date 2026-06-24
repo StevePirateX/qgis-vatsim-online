@@ -1,6 +1,14 @@
+from datetime import datetime, timezone
 import sys
 import os
 from pathlib import Path
+import time
+
+from PyQt5.QtCore import QMetaType, QDateTime
+from qgis._core import QgsField
+
+from osgeo import ogr, osr, gdal
+gdal.UseExceptions()
 
 # 1. Find the plugin root (the folder containing vatsim_data.py and .env)
 script = Path(__file__).resolve()
@@ -34,7 +42,84 @@ except ImportError:
         sys.path.insert(0, str(plugin_root))
     from vatsim_data import VatsimData
 
+FIELDS = [
+    QgsField("callsign", QMetaType.QString, len=8),
+    QgsField("cid", QMetaType.Int),
+    QgsField("heading", QMetaType.Int),
+    QgsField("groundspeed", QMetaType.Int),
+    QgsField("departure", QMetaType.QString, len=4),
+    QgsField("arrival", QMetaType.QString, len=4),
+    QgsField("aircraft", QMetaType.QString, len=8),
+    QgsField("timestamp", QMetaType.QDateTime)
+]
+
+GPKG_PATH = os.getenv("GPKG_PATH")
+TABLE_NAME = os.getenv("TABLE_NAME")
+
+if not GPKG_PATH or not TABLE_NAME:
+    raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
+
 # 4. Run your logic
 print("Fetching VATSIM Data")
 vatsim_data = VatsimData(VATSIM_DATA_URL)
 vatsim_data.fetch_vatsim_data()
+pilots = vatsim_data.pilots
+print(f"Fetched {len(pilots)} pilots")
+
+def save_to_gpkg():
+    # Open the GeoPackage in update mode
+    driver = ogr.GetDriverByName("GPKG")
+    ds = driver.Open(GPKG_PATH, update=1)
+    layer = ds.GetLayerByName(TABLE_NAME)
+    layer_defn = layer.GetLayerDefn()
+    field_indices = {layer_defn.GetFieldDefn(i).GetName(): i for i in range(layer_defn.GetFieldCount())}
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
+
+    # --- START TRANSACTION ---
+    layer.StartTransaction()
+
+    try:
+        for i, pilot in enumerate(pilots):
+            feature = ogr.Feature(layer_defn)
+            point = ogr.Geometry(ogr.wkbPoint25D)
+            point.AddPoint(pilot.longitude, pilot.latitude, pilot.altitude)
+            feature.SetGeometry(point)
+
+            attr_map = {
+                "callsign": pilot.callsign,
+                "cid": pilot.cid,
+                "heading": pilot.heading,
+                "groundspeed": pilot.groundspeed,
+                "departure": pilot.departure,
+                "arrival": pilot.arrival,
+                "aircraft": pilot.aircraft,
+                "timestamp": timestamp,
+            }
+            for col_name, value in attr_map.items():
+                if col_name in field_indices:
+                    feature.SetField(field_indices[col_name], value)
+
+            layer.CreateFeature(feature)
+            feature = None
+
+        # Commit all at once → huge speed boost
+        layer.CommitTransaction()
+        print(f"Appended {len(pilots)} features to {GPKG_PATH}|layername={TABLE_NAME}")
+
+    except Exception as e:
+        # Something went wrong – rollback to keep file consistent
+        layer.RollbackTransaction()
+        ds = None
+        raise RuntimeError(f"Insert failed: {e}")
+
+    # Close the datasource
+    ds = None
+
+
+start = time.time()
+save_to_gpkg()
+end = time.time()
+print(f"Save time: {end-start:.2f} secs")
+
