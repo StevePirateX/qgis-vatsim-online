@@ -60,13 +60,15 @@ if not GPKG_PATH or not TABLE_NAME:
     raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
 
 # 4. Run your logic
-print("Fetching VATSIM Data")
+print("Starting VATSIM data recording...")
 vatsim_data = VatsimData(VATSIM_DATA_URL)
-vatsim_data.fetch_vatsim_data()
-pilots = vatsim_data.pilots
-print(f"Fetched {len(pilots)} pilots")
 
-def save_to_gpkg():
+def get_vatsim_data():
+    vatsim_data.fetch_vatsim_data()
+    pilots = vatsim_data.pilots
+    return pilots
+
+def save_to_gpkg(pilots):
     # Open the GeoPackage in update mode
     driver = ogr.GetDriverByName("GPKG")
     ds = driver.Open(GPKG_PATH, update=1)
@@ -106,7 +108,6 @@ def save_to_gpkg():
 
         # Commit all at once → huge speed boost
         layer.CommitTransaction()
-        print(f"Appended {len(pilots)} features to {GPKG_PATH}|layername={TABLE_NAME}")
 
     except Exception as e:
         # Something went wrong – rollback to keep file consistent
@@ -119,7 +120,8 @@ def save_to_gpkg():
 
 
 start = time.time()
-save_to_gpkg()
+pilots = get_vatsim_data()
+save_to_gpkg(pilots)
 end = time.time()
-print(f"Save time: {end-start:.2f} secs")
+print(f"VATSIM Data fetched at {vatsim_data.get_fetch_time()} and saved {len(pilots)}: {end-start:.2f} secs")
 
