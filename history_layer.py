@@ -15,7 +15,7 @@ TABLE_NAME = 'vatsim_history'
 PRETTY_NAME = "VATSIM History"
 
 FIELDS = [
-    QgsField("callsign", QMetaType.QString, len=8),
+    QgsField("callsign", QMetaType.QString, len=9),
     QgsField("cid", QMetaType.Int),
     QgsField("heading", QMetaType.Int),
     QgsField("groundspeed", QMetaType.Int),
