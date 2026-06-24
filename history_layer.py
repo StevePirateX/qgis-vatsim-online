@@ -14,17 +14,18 @@ from .vatsim_aircraft_layer import VatsimAircraftLayer
 TABLE_NAME = 'vatsim_history'
 PRETTY_NAME = "VATSIM History"
 
+FIELDS = [
+    QgsField("callsign", QMetaType.QString, len=8),
+    QgsField("cid", QMetaType.Int),
+    QgsField("heading", QMetaType.Int),
+    QgsField("groundspeed", QMetaType.Int),
+    QgsField("departure", QMetaType.QString, len=4),
+    QgsField("arrival", QMetaType.QString, len=4),
+    QgsField("aircraft", QMetaType.QString, len=8),
+    QgsField("timestamp", QMetaType.QDateTime)
+]
+
 class HistoryLayer:
-    FIELDS = [
-        QgsField("callsign", QMetaType.QString, len=8),
-        QgsField("cid", QMetaType.Int),
-        QgsField("heading", QMetaType.Int),
-        QgsField("groundspeed", QMetaType.Int),
-        QgsField("departure", QMetaType.QString, len=4),
-        QgsField("arrival", QMetaType.QString, len=4),
-        QgsField("aircraft", QMetaType.QString, len=8),
-        QgsField("timestamp", QMetaType.QDateTime)
-    ]
 
     def __init__(self, gpkg_path: str=None, table_name=TABLE_NAME, pretty_name: str=PRETTY_NAME, crs="EPSG:4326", svg_name: str="aircraft.svg"):
         """
@@ -96,7 +97,7 @@ class HistoryLayer:
         temp_layer.startEditing()
 
         # Add fields
-        history_fields = HistoryLayer.FIELDS
+        history_fields = FIELDS
         temp_layer.dataProvider().addAttributes(history_fields)
         temp_layer.updateFields()
 
