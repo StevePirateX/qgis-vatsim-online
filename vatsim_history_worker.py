@@ -187,7 +187,7 @@ def run_process():
     pilots = get_vatsim_data()
     save_to_gpkg(pilots)
     end = time.time()
-    print(f"VATSIM Data fetched at {vatsim_data.get_update_time()} and saved {len(pilots)} pilots. Runtime: {end-start:.2f} secs")
+    print(f"VATSIM Data fetched at {vatsim_data.get_update_time()} and saved {len(pilots)} pilots. Runtime: {end-start:.2f} secs. ", end='')
 
 # ---------- Continuous loop ----------
 import signal
@@ -202,11 +202,15 @@ signal.signal(signal.SIGINT, graceful_exit)
 print("Recording started – fetching every 15 seconds. Press Ctrl+C to stop.")
 
 while True:
+    time_start = time.time()
     try:
         run_process()
     except Exception as e:
         # Log the error and continue – don't crash the loop
         print(f"Error during cycle: {e}", file=sys.stderr)
+    time_end = time.time()
 
     # Wait 15 seconds until the next fetch
-    time.sleep(15)
+    sleep_time = 15 - max(0,(time_end - time_start))
+    print(f"Sleeing for {sleep_time:.2f} secs")
+    time.sleep(sleep_time)
