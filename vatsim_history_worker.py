@@ -187,7 +187,7 @@ def run_process():
     pilots = get_vatsim_data()
     save_to_gpkg(pilots)
     end = time.time()
-    print(f"VATSIM Data fetched at {vatsim_data.get_update_time()} and saved {len(pilots)} pilots. Runtime: {end-start:.2f} secs. ", end='')
+    print(f"Data {datetime.strftime(vatsim_data.timestamp, '%H:%M:%S')}  |  {len(pilots)} pilots  |   Runtime: {end-start:.2f} secs. ", end='')
 
 # ---------- Continuous loop ----------
 import signal
@@ -202,6 +202,7 @@ signal.signal(signal.SIGINT, graceful_exit)
 print("Recording started – fetching every 15 seconds. Press Ctrl+C to stop.")
 
 while True:
+    print(f"{datetime.strftime(datetime.now(), '%H:%M:%S')} - ", end='')
     time_start = time.time()
     try:
         run_process()
