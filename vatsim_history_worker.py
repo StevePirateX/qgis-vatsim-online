@@ -59,6 +59,70 @@ TABLE_NAME = os.getenv("TABLE_NAME")
 if not GPKG_PATH or not TABLE_NAME:
     raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
 
+def qgs_fields_to_ogr(fields):
+    """Convert a list of QgsField objects to a list of (name, ogr_type, width) tuples."""
+    type_map = {
+        QMetaType.Int: ogr.OFTInteger,
+        QMetaType.QString: ogr.OFTString,
+        QMetaType.QDateTime: ogr.OFTDateTime,
+        # Add more mappings if you need other types
+    }
+    ogr_fields = []
+    for f in fields:
+        name = f.name()
+        qtype = f.type()
+        ogr_type = type_map.get(qtype, ogr.OFTString)  # default to string
+        width = f.length() if ogr_type == ogr.OFTString else 0
+        ogr_fields.append((name, ogr_type, width))
+    return ogr_fields
+
+
+def _safe_create_spatial_index(ds, table_name, geom_col='geom'):
+    try:
+        ds.ExecuteSQL(f"SELECT CreateSpatialIndex('{table_name}', '{geom_col}')")
+    except RuntimeError as e:
+        if 'already existing' not in str(e):
+            raise
+
+def ensure_geopackage(gpkg_path, table_name, fields):
+    file_exists = os.path.exists(gpkg_path)
+    ogr_field_specs = qgs_fields_to_ogr(fields)
+
+    def _create_layer(ds):
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(4326)
+        layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D)
+        for name, ogr_type, width in ogr_field_specs:
+            field = ogr.FieldDefn(name, ogr_type)
+            if width:
+                field.SetWidth(width)
+            layer.CreateField(field)
+        return layer
+
+    if not file_exists:
+        driver = ogr.GetDriverByName("GPKG")
+        ds = driver.CreateDataSource(gpkg_path)
+        if ds is None:
+            raise RuntimeError(f"Could not create GeoPackage at {gpkg_path}")
+        _create_layer(ds)
+        _safe_create_spatial_index(ds, table_name)
+        ds = None
+        print(f"Created GeoPackage and table '{table_name}'.")
+    else:
+        ds = ogr.Open(gpkg_path, update=0)
+        layer = ds.GetLayerByName(table_name)
+        if layer is None:
+            ds = None
+            ds = ogr.Open(gpkg_path, update=1)
+            _create_layer(ds)
+            _safe_create_spatial_index(ds, table_name)
+            ds = None
+            print(f"Created table '{table_name}' in existing GeoPackage.")
+        else:
+            ds = None
+
+ensure_geopackage(GPKG_PATH, TABLE_NAME, FIELDS)
+
 # 4. Run your logic
 print("Starting VATSIM data recording...")
 vatsim_data = VatsimData(VATSIM_DATA_URL)
