@@ -21,37 +21,36 @@ from qgis.PyQt.QtGui import QColor
 
 from .vatsim_pilot import VatsimPilot
 
-FIELDS = [
-    QgsField("callsign", QMetaType.Type.QString),
-    QgsField("cid", QMetaType.Type.Int),
-    QgsField("pilot", QMetaType.Type.QString),
-    QgsField("latitude", QMetaType.Type.QString),
-    QgsField("longitude", QMetaType.Type.QString),
-    QgsField("altitude", QMetaType.Type.Int),
-    QgsField("heading", QMetaType.Type.Int),
-    QgsField("groundspeed", QMetaType.Type.Int),
-    QgsField("transponder", QMetaType.Type.QString),
-    QgsField("server", QMetaType.Type.QString),
-    QgsField("departure", QMetaType.Type.QString),
-    QgsField("arrival", QMetaType.Type.QString),
-    QgsField("aircraft", QMetaType.Type.QString),
-    QgsField("cruise", QMetaType.Type.QString),
-    QgsField("route", QMetaType.Type.QString),
-    QgsField("timestamp", QMetaType.Type.QDateTime)
-]
-
 class VatsimAircraftLayer:
-    def __init__(self, aircraft_colour: QColor, layer_name: str, crs="EPSG:4326", svg_name="aircraft.svg", save_history: bool=False):
+    FIELDS = [
+        QgsField("callsign", QMetaType.Type.QString),
+        QgsField("cid", QMetaType.Type.Int),
+        QgsField("pilot", QMetaType.Type.QString),
+        QgsField("latitude", QMetaType.Type.QString),
+        QgsField("longitude", QMetaType.Type.QString),
+        QgsField("altitude", QMetaType.Type.Int),
+        QgsField("heading", QMetaType.Type.Int),
+        QgsField("groundspeed", QMetaType.Type.Int),
+        QgsField("transponder", QMetaType.Type.QString),
+        QgsField("server", QMetaType.Type.QString),
+        QgsField("departure", QMetaType.Type.QString),
+        QgsField("arrival", QMetaType.Type.QString),
+        QgsField("aircraft", QMetaType.Type.QString),
+        QgsField("cruise", QMetaType.Type.QString),
+        QgsField("route", QMetaType.Type.QString),
+        QgsField("timestamp", QMetaType.Type.QDateTime)
+    ]
+
+    def __init__(self, aircraft_colour: QColor, layer_name: str, crs="EPSG:4326", svg_name="aircraft.svg", save_history=False):
         """Initialize a memory layer for live point updates."""
         self.layer = QgsVectorLayer(f"Point?crs={crs}", layer_name, "memory")
         self.pr = self.layer.dataProvider()
-        self.save_history = save_history
 
         plugin_dir = os.path.dirname(__file__)  # Path to psx_vector_layer.py
         self.svg_path = os.path.join(plugin_dir, svg_name)
 
         # Define all attributes (expanded for VATSIM data)
-        self.fields = FIELDS
+        self.fields = VatsimAircraftLayer.FIELDS
         self.pr.addAttributes(self.fields)
         self.layer.updateFields()
 
@@ -59,6 +58,7 @@ class VatsimAircraftLayer:
         self.features = {}  # Dictionary to track features by CID
         self._apply_default_style(aircraft_colour=aircraft_colour)
 
+        self.save_history = save_history
 
     def _apply_default_style(self, aircraft_colour: QColor):
         """Set a visual style (blue arrow for heading)."""
@@ -104,12 +104,12 @@ class VatsimAircraftLayer:
 
         # Apply labeling
         self.layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
-        self.layer.setLabelsEnabled(not self.save_history)
+        self.layer.setLabelsEnabled(True)
 
         # Force visibility and style sync
         tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
         if tree_layer:
-            tree_layer.setItemVisibilityChecked(not self.save_history)
+            tree_layer.setItemVisibilityChecked(True)
 
         # Mark layer as modified to force refresh
         self.layer.triggerRepaint()

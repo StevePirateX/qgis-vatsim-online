@@ -3,12 +3,13 @@ from qgis.PyQt.QtCore import pyqtSignal, QThread, QMutex
 from qgis._core import Qgis
 
 from .vatsim_aircraft_layer import VatsimAircraftLayer
+from .history_layer import HistoryLayer
 
 class VatsimUpdateThread(QThread):
     update_complete = pyqtSignal(bool)  # Signal to indicate update completion
     log_message = pyqtSignal(str, int)  # For thread-safe logging
 
-    def __init__(self, vatsim_data, vatsim_layer, refresh_rate, history_layer:VatsimAircraftLayer=None, hide_vatsim_id: int=0, debug: bool=False):
+    def __init__(self, vatsim_data, vatsim_layer, refresh_rate, history_layer:HistoryLayer=None, hide_vatsim_id: int=0, debug: bool=False):
         super().__init__()
         self.vatsim_data = vatsim_data
         self.vatsim_layer = vatsim_layer
@@ -56,7 +57,7 @@ class VatsimUpdateThread(QThread):
                 if result and self.debug:
                     self.log_message.emit("Update complete", Qgis.MessageLevel.Success)
                 if self.history_layer is not None:
-                    self.history_layer.full_refresh(self.vatsim_data.pilots)
+                    self.history_layer.add_pilot_positions(self.vatsim_data.pilots, self.vatsim_data.get_update_time())
                 return result
             finally:
                 self._mutex.unlock()

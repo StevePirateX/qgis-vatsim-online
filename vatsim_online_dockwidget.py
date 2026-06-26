@@ -23,18 +23,25 @@
 """
 
 import os
+from pathlib import Path
 
 from PyQt5.QtGui import QColor
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis._core import QgsMessageLog, Qgis
+from dotenv import load_dotenv, dotenv_values
 
+from.history_layer import HistoryLayer
 from .vatsim_aircraft_layer import VatsimAircraftLayer
 from .vatsim_data import VatsimData
 from .update_data_thread import VatsimUpdateThread
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     str(os.path.dirname(__file__)), 'vatsim_online_dockwidget_base.ui'))
+
+plugin_dir = Path(__file__).resolve().parent
+env_path = plugin_dir / '.env'
+load_dotenv(dotenv_path=env_path)
 
 class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
@@ -49,9 +56,9 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # http://doc.qt.io/qt-5/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
-        self.vatsim_data_url = "https://data.vatsim.net/v3/vatsim-data.json"
-        self.afv_transceivers_url = "https://data.vatsim.net/v3/transceivers-data.json"
-        self.vatsim_data_refresh_rate = 60  # Seconds
+        self.vatsim_data_url = os.getenv("VATSIM_DATA_URL")
+        self.afv_transceivers_url = os.getenv("AFV_TRANSCEIVERS_URL")
+        self.vatsim_data_refresh_rate = os.getenv("REFRESH_TIME_SECS")  # Seconds
         self.vatsim_data = VatsimData(self.vatsim_data_url)
         self.fetching_data = False
         self.vatsim_layer = None
@@ -72,6 +79,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def debug_update(self):
         self.debug = self.chkDebug.isChecked()
 
+    def history_be_recorded(self) -> bool:
+        return self.chkHistory.isChecked()
 
     def on_btn_get_data_released(self):
         """Toggle between start/stop updating."""
@@ -152,5 +161,11 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if not self.is_updating:
             self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
+            self.history_layer.create_spatial_index() if self.history_be_recorded() else None
+
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
-        self.history_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="History Layer", save_history=True) if self.is_updating else None
+
+        if self.history_be_recorded() and self.is_updating:
+            self.history_layer = HistoryLayer()
+        else:
+            self.history_layer = None
