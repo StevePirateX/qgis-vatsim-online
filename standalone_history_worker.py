@@ -3,6 +3,7 @@ import sys
 import os
 from pathlib import Path
 import time
+import importlib
 
 from PyQt5.QtCore import QMetaType, QDateTime
 from qgis._core import QgsField
@@ -10,7 +11,6 @@ from qgis._core import QgsField
 from osgeo import ogr, osr, gdal
 gdal.UseExceptions()
 
-# 1. Find the plugin root (the folder containing vatsim_data.py and .env)
 script = Path(__file__).resolve()
 plugin_root = script.parent
 while not (plugin_root / "vatsim_data.py").exists():
@@ -18,29 +18,21 @@ while not (plugin_root / "vatsim_data.py").exists():
         raise RuntimeError("Cannot locate plugin root – vatsim_data.py not found")
     plugin_root = plugin_root.parent
 
-# 2. Load .env from the plugin root
+valid_pkg_name = "vatsim_plugin"
+pkg = type(sys)(valid_pkg_name)
+pkg.__path__ = [str(plugin_root)]
+pkg.__file__ = str(plugin_root / "__init__.py")
+sys.modules[valid_pkg_name] = pkg
+from vatsim_plugin.vatsim_data import VatsimData    # noqa - No QA from IDE
+
 from dotenv import load_dotenv
 load_dotenv(plugin_root / '.env')
 VATSIM_DATA_URL = os.getenv("VATSIM_DATA_URL")
+GPKG_PATH = os.getenv("GPKG_PATH")
+TABLE_NAME = os.getenv("TABLE_NAME")
 
-# 3. Import VatsimData safely, even if it uses relative imports internally
-# We need to import it as part of its package. The package name is the folder name.
-package_name = plugin_root.name
-parent_of_plugin = plugin_root.parent
-
-# Add parent directory to sys.path to make the package importable
-if str(parent_of_plugin) not in sys.path:
-    sys.path.insert(0, str(parent_of_plugin))
-
-# Now import using the full package path
-try:
-    # Try package import first (handles any internal relative imports in vatsim_data.py)
-    exec(f"from {package_name}.vatsim_data import VatsimData")
-except ImportError:
-    # Fallback: maybe vatsim_data.py has no relative imports, direct import works
-    if str(plugin_root) not in sys.path:
-        sys.path.insert(0, str(plugin_root))
-    from vatsim_data import VatsimData
+if not GPKG_PATH or not TABLE_NAME:
+    raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
 
 FIELDS = [
     QgsField("callsign", QMetaType.QString, len=9),
@@ -52,12 +44,6 @@ FIELDS = [
     QgsField("aircraft", QMetaType.QString, len=8),
     QgsField("timestamp", QMetaType.QDateTime)
 ]
-
-GPKG_PATH = os.getenv("GPKG_PATH")
-TABLE_NAME = os.getenv("TABLE_NAME")
-
-if not GPKG_PATH or not TABLE_NAME:
-    raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
 
 def qgs_fields_to_ogr(fields):
     """Convert a list of QgsField objects to a list of (name, ogr_type, width) tuples."""
