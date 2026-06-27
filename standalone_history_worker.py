@@ -5,9 +5,6 @@ from pathlib import Path
 import time
 import importlib
 
-from PyQt5.QtCore import QMetaType, QDateTime
-from qgis._core import QgsField
-
 from osgeo import ogr, osr, gdal
 gdal.UseExceptions()
 
@@ -35,32 +32,15 @@ if not GPKG_PATH or not TABLE_NAME:
     raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
 
 FIELDS = [
-    QgsField("callsign", QMetaType.QString, len=9),
-    QgsField("cid", QMetaType.Int),
-    QgsField("heading", QMetaType.Int),
-    QgsField("groundspeed", QMetaType.Int),
-    QgsField("departure", QMetaType.QString, len=4),
-    QgsField("arrival", QMetaType.QString, len=4),
-    QgsField("aircraft", QMetaType.QString, len=8),
-    QgsField("timestamp", QMetaType.QDateTime)
+    ("callsign", ogr.OFTString, 8),
+    ("cid", ogr.OFTInteger, 0),
+    ("heading", ogr.OFTInteger, 0),
+    ("groundspeed", ogr.OFTInteger, 0),
+    ("departure", ogr.OFTString, 4),
+    ("arrival", ogr.OFTString, 4),
+    ("aircraft", ogr.OFTString, 8),
+    ("timestamp", ogr.OFTDateTime, 0),
 ]
-
-def qgs_fields_to_ogr(fields):
-    """Convert a list of QgsField objects to a list of (name, ogr_type, width) tuples."""
-    type_map = {
-        QMetaType.Int: ogr.OFTInteger,
-        QMetaType.QString: ogr.OFTString,
-        QMetaType.QDateTime: ogr.OFTDateTime,
-        # Add more mappings if you need other types
-    }
-    ogr_fields = []
-    for f in fields:
-        name = f.name()
-        qtype = f.type()
-        ogr_type = type_map.get(qtype, ogr.OFTString)  # default to string
-        width = f.length() if ogr_type == ogr.OFTString else 0
-        ogr_fields.append((name, ogr_type, width))
-    return ogr_fields
 
 
 def _safe_create_spatial_index(ds, table_name, geom_col='geom'):
@@ -72,13 +52,12 @@ def _safe_create_spatial_index(ds, table_name, geom_col='geom'):
 
 def ensure_geopackage(gpkg_path, table_name, fields):
     file_exists = os.path.exists(gpkg_path)
-    ogr_field_specs = qgs_fields_to_ogr(fields)
 
     def _create_layer(ds):
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(4326)
         layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D)
-        for name, ogr_type, width in ogr_field_specs:
+        for name, ogr_type, width in fields:
             field = ogr.FieldDefn(name, ogr_type)
             if width:
                 field.SetWidth(width)
