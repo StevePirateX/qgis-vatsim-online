@@ -1,4 +1,4 @@
-class VatsimPilot:
+class Pilot:
 
     def __init__(self, pilot):
         self.cid = pilot['cid']

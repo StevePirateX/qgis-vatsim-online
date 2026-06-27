@@ -19,7 +19,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtGui import QColor
 
-from .vatsim_pilot import VatsimPilot
+from .pilot import Pilot
 
 class VatsimAircraftLayer:
     FIELDS = [
@@ -116,7 +116,7 @@ class VatsimAircraftLayer:
         self.layer.reload()
 
 
-    def full_refresh(self, pilots: List[VatsimPilot], hidden_vatsim_id: int=0):
+    def full_refresh(self, pilots: List[Pilot], hidden_vatsim_id: int=0):
         """
         Completely replace all features with fresh pilot data.
 

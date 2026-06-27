@@ -8,7 +8,7 @@ from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVecto
     QgsTextBufferSettings, QgsVectorLayerSimpleLabeling, QgsFeature, QgsGeometry, QgsPoint
 from qgis.core import edit
 
-from .vatsim_pilot import VatsimPilot
+from .pilot import Pilot
 from .live_aircraft_layer import VatsimAircraftLayer
 
 TABLE_NAME = 'vatsim_history'
@@ -174,7 +174,7 @@ class HistoryLayer:
         self.layer.triggerRepaint()
         self.layer.reload()
 
-    def add_pilot_positions(self, pilots: List[VatsimPilot], timestamp):
+    def add_pilot_positions(self, pilots: List[Pilot], timestamp):
         try:
             with edit(self.layer):
 

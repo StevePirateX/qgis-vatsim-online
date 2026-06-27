@@ -2,14 +2,14 @@ from datetime import datetime
 from typing import List
 
 import requests
-from .vatsim_pilot import VatsimPilot
+from .pilot import Pilot
 
 class VatsimData:
 
     def __init__(self, vatsim_data_url="https://data.vatsim.net/v3/vatsim-data.json"):
         self.vatsim_data_url = vatsim_data_url
         self.data = None
-        self.pilots: List[VatsimPilot] = []
+        self.pilots: List[Pilot] = []
         self.timestamp = None
 
     def fetch_vatsim_data(self):
@@ -29,7 +29,7 @@ class VatsimData:
             return None
 
     def process_pilots(self):
-        self.pilots = [VatsimPilot(pilot) for pilot in self.data['pilots']]
+        self.pilots = [Pilot(pilot) for pilot in self.data['pilots']]
 
     def get_pilot(self, index: int=0):
         return self.pilots[index].callsign, self.pilots[index].get_position()
