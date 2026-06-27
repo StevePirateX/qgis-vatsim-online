@@ -7,29 +7,15 @@
     <x>0</x>
     <y>0</y>
     <width>232</width>
-    <height>291</height>
+    <height>252</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>VATSIM Online Development</string>
+   <string>VATSIM Online</string>
   </property>
   <widget class="QWidget" name="dockWidgetContents">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="5" column="0" colspan="2">
-     <widget class="Line" name="line_2">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-     </widget>
-    </item>
-    <item row="10" column="0" colspan="2">
-     <widget class="QPushButton" name="btnGetData">
-      <property name="text">
-       <string>Get VATSIM Data</string>
-      </property>
-     </widget>
-    </item>
-    <item row="3" column="1">
+    <item row="2" column="1">
      <widget class="QSpinBox" name="spnVatsimId">
       <property name="toolTip">
        <string>VATSIM ID to hide</string>
@@ -44,93 +30,33 @@
        <bool>false</bool>
       </property>
       <property name="minimum">
-       <number>80000</number>
+       <number>0</number>
       </property>
       <property name="maximum">
        <number>10000000</number>
       </property>
-      <property name="value">
-       <number>1000000</number>
-      </property>
      </widget>
     </item>
-    <item row="9" column="1">
-     <widget class="QCheckBox" name="chkDebug">
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
-    <item row="8" column="0" colspan="2">
-     <widget class="Line" name="line">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="1">
-     <widget class="QSpinBox" name="spnRefreshRate">
-      <property name="suffix">
-       <string> secs</string>
-      </property>
-      <property name="minimum">
-       <number>15</number>
-      </property>
-      <property name="maximum">
-       <number>600</number>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="0">
-     <widget class="QLabel" name="lblRefreshRate">
-      <property name="text">
-       <string>Refresh Rate</string>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="1">
-     <widget class="QCheckBox" name="chkHideVatsimId">
-      <property name="toolTip">
-       <string>Hide specified VATSIM ID</string>
-      </property>
-      <property name="whatsThis">
-       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;This allows you to hide a VATSIM ID from the map.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;This can be used if you are receiving your aircraft data from another source.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
-    <item row="9" column="0">
-     <widget class="QLabel" name="lblDebug">
-      <property name="text">
-       <string>Debug</string>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="0">
-     <widget class="QLabel" name="lblHideVatsimId">
-      <property name="text">
-       <string>Hide VATSIM ID?</string>
-      </property>
-     </widget>
-    </item>
-    <item row="7" column="0">
-     <widget class="QLabel" name="label_2">
-      <property name="text">
-       <string>Data File</string>
-      </property>
-     </widget>
-    </item>
-    <item row="3" column="0">
-     <widget class="QLabel" name="lblVatsimId">
-      <property name="text">
-       <string>VATSIM ID</string>
-      </property>
-     </widget>
-    </item>
-    <item row="4" column="1">
+    <item row="3" column="1">
      <widget class="QgsColorButton" name="mColorButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>89</width>
+        <height>16</height>
+       </size>
+      </property>
       <property name="colorDialogTitle">
        <string>Select Color</string>
       </property>
@@ -162,14 +88,48 @@
       </property>
      </widget>
     </item>
-    <item row="4" column="0">
-     <widget class="QLabel" name="label">
+    <item row="5" column="1">
+     <widget class="QCheckBox" name="chkHistory">
       <property name="text">
-       <string>Colour</string>
+       <string/>
       </property>
      </widget>
     </item>
-    <item row="7" column="1">
+    <item row="7" column="0" colspan="2">
+     <widget class="Line" name="line">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="lblRefreshRate">
+      <property name="text">
+       <string>Refresh Rate</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="label">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="text">
+       <string>Aircraft Colour</string>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="0" colspan="2">
+     <widget class="QPushButton" name="btnGetData">
+      <property name="text">
+       <string>Get VATSIM Data</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="1">
      <widget class="QgsFileWidget" name="mHistoryFile">
       <property name="acceptDrops">
        <bool>true</bool>
@@ -183,22 +143,55 @@
       <property name="filter">
        <string>GeoPackage (*.gpkg, *.GPKG)</string>
       </property>
+      <property name="defaultRoot">
+       <string>History.gpkg</string>
+      </property>
       <property name="storageMode">
        <enum>QgsFileWidget::SaveFile</enum>
+      </property>
+      <property name="relativeStorage">
+       <enum>QgsFileWidget::Absolute</enum>
       </property>
       <property name="options">
        <set>QFileDialog::DontConfirmOverwrite</set>
       </property>
      </widget>
     </item>
-    <item row="6" column="1">
-     <widget class="QCheckBox" name="chkHistory">
+    <item row="2" column="0">
+     <widget class="QLabel" name="lblVatsimId">
       <property name="text">
-       <string/>
+       <string>Filter VATSIM ID</string>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="0" colspan="2">
+     <widget class="Line" name="line_2">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QSpinBox" name="spnRefreshRate">
+      <property name="suffix">
+       <string> secs</string>
+      </property>
+      <property name="minimum">
+       <number>15</number>
+      </property>
+      <property name="maximum">
+       <number>600</number>
       </property>
      </widget>
     </item>
     <item row="6" column="0">
+     <widget class="QLabel" name="label_2">
+      <property name="text">
+       <string>Data File</string>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="0">
      <widget class="QLabel" name="label_3">
       <property name="text">
        <string>Record Data</string>
@@ -222,22 +215,6 @@
  </customwidgets>
  <resources/>
  <connections>
-  <connection>
-   <sender>chkDebug</sender>
-   <signal>stateChanged(int)</signal>
-   <receiver>VatsimOnlineDockWidgetBase</receiver>
-   <slot>debug_update()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>170</x>
-     <y>139</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>115</x>
-     <y>100</y>
-    </hint>
-   </hints>
-  </connection>
   <connection>
    <sender>btnGetData</sender>
    <signal>released()</signal>

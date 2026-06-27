@@ -28,7 +28,7 @@ from pathlib import Path
 from PyQt5.QtGui import QColor
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
-from qgis._core import QgsMessageLog, Qgis
+from qgis._core import QgsMessageLog, Qgis, QgsProject
 from dotenv import load_dotenv, dotenv_values
 
 from.history_layer import HistoryLayer
@@ -65,8 +65,16 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.history_layer = None
         self.update_thread = None
         self.is_updating = False
-        self.debug = self.chkDebug.isChecked()
+        self.debug = False
         self.hidden_vatsim_id = self.spnVatsimId.value()
+
+        project_path = QgsProject.instance().homePath()
+        if project_path:
+            self.mHistoryFile.setDefaultRoot(project_path)
+            layer_uri = HistoryLayer.find_existing_layer()
+            if layer_uri is not None:
+                layer_source = layer_uri.source().partition('|')[0]
+                self.mHistoryFile.setFilePath(layer_source)
 
 
     def closeEvent(self, event, **kwargs):
@@ -77,7 +85,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
 
     def debug_update(self):
-        self.debug = self.chkDebug.isChecked()
+        self.debug = False
 
     def history_be_recorded(self) -> bool:
         return self.chkHistory.isChecked()
@@ -93,10 +101,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def _start_updating(self):
         """Start the auto-update thread."""
         refresh_rate = self.spnRefreshRate.value()
-        hide_vatsim_id = self.chkHideVatsimId.isChecked()
         self.hidden_vatsim_id = self.spnVatsimId.value()
-
-        hidden_vatsim_id = self.spnVatsimId.value() if hide_vatsim_id else 0
 
         # Setup UI
         self.is_updating = True
@@ -108,7 +113,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.vatsim_layer,
             refresh_rate,
             self.history_layer,
-            hidden_vatsim_id,
+            self.hidden_vatsim_id,
             self.debug
         )
 
@@ -147,12 +152,10 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def update_ui_state(self):
         self.spnRefreshRate.setEnabled(not self.is_updating)
-        self.chkHideVatsimId.setEnabled(not self.is_updating)
         self.spnVatsimId.setEnabled(not self.is_updating)
         self.mColorButton.setEnabled(not self.is_updating)
         self.chkHistory.setEnabled(not self.is_updating)
         self.mHistoryFile.setEnabled(not self.is_updating)
-        self.chkDebug.setEnabled(not self.is_updating)
 
         button_text = "Stop Updating" if self.is_updating else "Get Data"
         self.btnGetData.setText(button_text)
