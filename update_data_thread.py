@@ -2,7 +2,7 @@ import time
 from qgis.PyQt.QtCore import pyqtSignal, QThread, QMutex
 from qgis._core import Qgis
 
-from .vatsim_aircraft_layer import VatsimAircraftLayer
+from .live_aircraft_layer import VatsimAircraftLayer
 from .history_layer import HistoryLayer
 
 class VatsimUpdateThread(QThread):

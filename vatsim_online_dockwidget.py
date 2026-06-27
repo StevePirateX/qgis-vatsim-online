@@ -32,7 +32,7 @@ from qgis._core import QgsMessageLog, Qgis, QgsProject
 from dotenv import load_dotenv, dotenv_values
 
 from.history_layer import HistoryLayer
-from .vatsim_aircraft_layer import VatsimAircraftLayer
+from .live_aircraft_layer import VatsimAircraftLayer
 from .vatsim_data import VatsimData
 from .update_data_thread import VatsimUpdateThread
 

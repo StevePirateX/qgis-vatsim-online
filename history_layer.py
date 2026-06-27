@@ -9,7 +9,7 @@ from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVecto
 from qgis.core import edit
 
 from .vatsim_pilot import VatsimPilot
-from .vatsim_aircraft_layer import VatsimAircraftLayer
+from .live_aircraft_layer import VatsimAircraftLayer
 
 TABLE_NAME = 'vatsim_history'
 PRETTY_NAME = "VATSIM History"
