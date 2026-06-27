@@ -18,7 +18,7 @@ The plugin has been tested on QGIS 3.44. It has NOT been converted to QGIS 4 yet
 
 ## Standalone Script
 
-The plugin also uses a `vatsim_history_worker.py` to be able to record the data to a GeoPackage using a terminal. This enables the data to be recorded without using the Desktop QGIS.
+The plugin also uses a `standalone_history_worker.py` to be able to record the data to a GeoPackage using a terminal. This enables the data to be recorded without using the Desktop QGIS.
 
 To use the standalone script, a `.env` file must be created with the following parameters defined:
 
@@ -27,4 +27,4 @@ To use the standalone script, a `.env` file must be created with the following p
 - GPKG_PATH: The file location of the GeoPackage. e.g. `/home/user/vatsim/history.gpkg`
 - TABLE_NAME: Name of the table inside the GeoPackage that will contain the data. e.g. `vatsim_history`
 
-The script can then just be run with `python3 vatsim_history_worker.py`
+The script can then just be run with `python3 standalone_history_worker.py`
