@@ -32,7 +32,7 @@ if not GPKG_PATH or not TABLE_NAME:
     raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
 
 FIELDS = [
-    ("callsign", ogr.OFTString, 8),
+    ("callsign", ogr.OFTString, 9),
     ("cid", ogr.OFTInteger, 0),
     ("heading", ogr.OFTInteger, 0),
     ("groundspeed", ogr.OFTInteger, 0),
