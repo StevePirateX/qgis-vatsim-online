@@ -177,6 +177,6 @@ while True:
     time_end = time.time()
 
     # Wait 15 seconds until the next fetch
-    sleep_time = 15 - max(0,(time_end - time_start))
+    sleep_time = 15 - max(0,min(15,(time_end - time_start)))
     print(f"Sleeing for {sleep_time:.2f} secs")
     time.sleep(sleep_time)
