@@ -82,21 +82,21 @@ def ensure_geopackage(gpkg_path, table_name, fields):
             layer = None
             ds = None
 
-    if layer is None:
-        ds = None
-        driver = ogr.GetDriverByName("GPKG")
-        if os.path.exists(gpkg_path) and os.path.getsize(gpkg_path) == 0:
-            os.remove(gpkg_path)  # nuke empty/corrupt file
-            ds = driver.CreateDataSource(gpkg_path)
-            _create_layer(ds)
+        if layer is None:
+            ds = None
+            driver = ogr.GetDriverByName("GPKG")
+            if os.path.exists(gpkg_path) and os.path.getsize(gpkg_path) == 0:
+                os.remove(gpkg_path)  # nuke empty/corrupt file
+                ds = driver.CreateDataSource(gpkg_path)
+                _create_layer(ds)
+            else:
+                ds = ogr.Open(gpkg_path, update=1)
+                _create_layer(ds)
+            _safe_create_spatial_index(ds, table_name)
+            ds = None
+            print(f"Created table '{table_name}' in GeoPackage.")
         else:
-            ds = ogr.Open(gpkg_path, update=1)
-            _create_layer(ds)
-        _safe_create_spatial_index(ds, table_name)
-        ds = None
-        print(f"Created table '{table_name}' in GeoPackage.")
-    else:
-        ds = None
+            ds = None
 
 ensure_geopackage(GPKG_PATH, TABLE_NAME, FIELDS)
 
