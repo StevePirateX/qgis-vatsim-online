@@ -159,9 +159,14 @@ class VatsimOnline:
                 self.menu,
                 action)
 
-        self.actions.append(action)
+            self.option_action = QAction(icon, 'Options', self.iface.mainWindow())
+            #self.option_action.triggered.connect(self.show_options)
+            self.iface.addPluginToMenu(self.menu, self.option_action)
 
-        return action
+        self.actions.append(action)
+        self.actions.append(self.option_action)
+
+        return self.actions
 
 
     def initGui(self):
