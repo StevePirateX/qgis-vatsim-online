@@ -29,6 +29,7 @@ from .resources import *
 
 # Import the code for the DockWidget
 from .vatsim_online_dockwidget import VatsimOnlineDockWidget
+from .options.options import OptionsManager
 import os.path
 
 
@@ -48,6 +49,9 @@ class VatsimOnline:
 
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
+
+        # Initialize options
+        self.options_manager = OptionsManager(self.iface.mainWindow())
 
         # initialize locale
         locale = QSettings().value('locale/userLocale')[0:2]
@@ -160,7 +164,7 @@ class VatsimOnline:
                 action)
 
             self.option_action = QAction(icon, 'Options', self.iface.mainWindow())
-            #self.option_action.triggered.connect(self.show_options)
+            self.option_action.triggered.connect(self.options_manager.show_dialog)
             self.iface.addPluginToMenu(self.menu, self.option_action)
 
         self.actions.append(action)
