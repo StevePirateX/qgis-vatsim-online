@@ -150,6 +150,7 @@ class VatsimAircraftLayer:
             for pilot in pilots:
                 currently_connected_pilot_callsigns.append(pilot.get_callsign())
 
+            # Update pilots that already exist in layer
             for pilot in previously_connected_pilots:
                 pilot_callsign = pilot.attribute('callsign')
                 old_pilot_callsigns.append(pilot_callsign)
@@ -167,37 +168,33 @@ class VatsimAircraftLayer:
                 if pilot.callsign not in updated_callsigns:
                     new_pilots.append(pilot)
 
-            print(f"Pilot Updated: {len(updated_callsigns)}; New: {len(new_pilots)}, Deleted: {len(disconnected_pilot_ids)}")
+            print(f"VATSIM Pilot Refresh: Updated: {len(updated_callsigns)}; New: {len(new_pilots)}; Deleted: {len(disconnected_pilot_ids)}")
 
-            with edit(self.layer):
-                # Remove all existing features
-                self.pr.deleteFeatures(disconnected_pilot_ids)
+            # Remove disconnected pilots
+            self.pr.deleteFeatures(disconnected_pilot_ids)
 
-                # Add fresh features for all current pilots
-                features = []
-                for pilot in new_pilots:
-                    if pilot.cid == hidden_vatsim_id:
+            # Add new pilots
+            features = []
+            for pilot in new_pilots:
+                if pilot.cid == hidden_vatsim_id:
+                    continue
+                pilot_feature = QgsFeature()
+                pilot_feature.setFields(self.qgs_fields)
+                pilot_feature.setGeometry(QgsGeometry.fromPoint(
+                    QgsPoint(pilot.longitude, pilot.latitude, pilot.altitude)
+                ))
+
+                pilot_attributes = pilot.get_details()
+                for attribute, value in pilot_attributes.items():
+                    field_index = pilot_feature.fields().indexFromName(attribute)
+                    if field_index == -1:
                         continue
-                    pilot_feature = QgsFeature()
-                    pilot_feature.setFields(self.qgs_fields)
-                    pilot_feature.setGeometry(QgsGeometry.fromPoint(
-                        QgsPoint(pilot.longitude, pilot.latitude, pilot.altitude)
-                    ))
+                    pilot_feature.setAttribute(field_index, value)
 
-                    pilot_attributes = pilot.get_details()
-                    for attribute, value in pilot_attributes.items():
-                        field_index = pilot_feature.fields().indexFromName(attribute)
-                        if field_index == -1:
-                            continue
-                        pilot_feature.setAttribute(field_index, value)
+                features.append(pilot_feature)
 
-                    features.append(pilot_feature)
-
-                self.pr.addFeatures(features)
-
-            # Force a full refresh of the layer
+            self.pr.addFeatures(features)
             self.layer.triggerRepaint()
-            self.layer.dataProvider().reloadData()
             return True
 
         except Exception as e:
