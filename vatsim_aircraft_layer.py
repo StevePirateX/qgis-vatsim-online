@@ -115,6 +115,19 @@ class VatsimAircraftLayer:
         self.layer.triggerRepaint()
         self.layer.reload()
 
+    def update_pilot_attributes(self, feature_id, details: dict)->bool:
+        fields = self.layer.fields()
+        updates = {}
+        for name, value in details.items():
+            field_index = fields.indexFromName(name)
+            if field_index == -1:
+                continue
+            updates[field_index] = value
+
+        if updates:
+            success = self.pr.changeAttributeValues({feature_id: updates})
+            return success
+        return False
 
     def full_refresh(self, pilots: List[VatsimPilot], hidden_vatsim_id: int=0):
         """
@@ -126,13 +139,43 @@ class VatsimAircraftLayer:
                 source. This is useful if they are using another plugin to display their own aircraft.
         """
         try:
+            previously_connected_pilots = self.layer.getFeatures()
+
+            old_pilot_callsigns = []
+            updated_callsigns = []
+            currently_connected_pilot_callsigns = []
+            new_pilots = []
+            disconnected_pilot_ids = []
+
+            for pilot in pilots:
+                currently_connected_pilot_callsigns.append(pilot.get_callsign())
+
+            for pilot in previously_connected_pilots:
+                pilot_callsign = pilot.attribute('callsign')
+                old_pilot_callsigns.append(pilot_callsign)
+                if pilot_callsign in currently_connected_pilot_callsigns:
+                    current_pilot = pilots[currently_connected_pilot_callsigns.index(pilot_callsign)]
+                    lat, lon, alt = current_pilot.get_position()
+                    geometry = QgsGeometry.fromPoint(QgsPoint(lon, lat, alt))
+                    self.pr.changeGeometryValues({pilot.id(): geometry})
+                    updated = self.update_pilot_attributes(pilot.id(), current_pilot.get_details())
+                    updated_callsigns.append(pilot_callsign)
+                else:
+                    disconnected_pilot_ids.append(pilot.id())
+
+            for i, pilot in enumerate(pilots):
+                if pilot.callsign not in updated_callsigns:
+                    new_pilots.append(pilot)
+
+            print(f"Pilot Updated: {len(updated_callsigns)}; New: {len(new_pilots)}, Deleted: {len(disconnected_pilot_ids)}")
+
             with edit(self.layer):
                 # Remove all existing features
-                self.pr.truncate()
+                self.pr.deleteFeatures(disconnected_pilot_ids)
 
                 # Add fresh features for all current pilots
                 features = []
-                for pilot in pilots:
+                for pilot in new_pilots:
                     if pilot.cid == hidden_vatsim_id:
                         continue
                     pilot_feature = QgsFeature()
