@@ -15,13 +15,13 @@ class VatsimData:
         """Fetch VATSIM data from the given URL"""
         # Get current timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"VATSIM Data Processing - {timestamp}")
+        # print(f"VATSIM Data Processing - {timestamp}")
 
         try:
             response = requests.get(self.vatsim_data_url)
             response.raise_for_status()  # Raise an exception for HTTP errors
             self.data = response.json()
-            print(f"Total connected pilots: {len(self.data['pilots'])}\n")
+            # print(f"Total connected pilots: {len(self.data['pilots'])}\n")
             self.process_pilots()
             return None
         except requests.exceptions.RequestException as e:
