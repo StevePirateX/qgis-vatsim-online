@@ -31,3 +31,26 @@ class VatsimPilot:
 
     def get_groundspeed(self):
         return self.groundspeed
+
+    def get_details(self)->dict:
+        details = dict(cid=self.cid,
+                       name=self.name,
+                       callsign=self.callsign,
+                       server=self.server,
+                       latitude=self.latitude,
+                       longitude=self.longitude,
+                       altitude=self.altitude,
+                       heading=self.heading,
+                       groundspeed=self.groundspeed,
+                       transponder=self.transponder,
+                       flight_plan=self.flight_plan,
+                       logon_time=self.logon_time,
+                       last_update=self.last_updated,
+                       departure=self.departure,
+                       arrival=self.arrival,
+                       aircraft=self.aircraft,
+                       cruise=self.cruise,
+                       route=self.route
+                       )
+        return details
+

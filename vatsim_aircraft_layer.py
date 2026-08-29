@@ -4,7 +4,7 @@ import os
 from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtGui import QFont
 from qgis._core import QgsSymbolLayer, QgsProperty, QgsPalLayerSettings, QgsTextFormat, QgsTextBufferSettings, \
-    QgsVectorLayerSimpleLabeling
+    QgsVectorLayerSimpleLabeling, QgsFields, QgsMessageLog, Qgis
 from qgis.core import (
     QgsVectorLayer,
     QgsFeature,
@@ -35,7 +35,7 @@ class VatsimAircraftLayer:
         self.fields = [
             QgsField("callsign", QMetaType.Type.QString),
             QgsField("cid", QMetaType.Type.Int),
-            QgsField("pilot", QMetaType.Type.QString),
+            QgsField("name", QMetaType.Type.QString),
             QgsField("latitude", QMetaType.Type.QString),
             QgsField("longitude", QMetaType.Type.QString),
             QgsField("altitude", QMetaType.Type.Int),
@@ -49,7 +49,11 @@ class VatsimAircraftLayer:
             QgsField("cruise", QMetaType.Type.QString),
             QgsField("route", QMetaType.Type.QString)
         ]
-        self.pr.addAttributes(self.fields)
+        self.qgs_fields = QgsFields()
+        for field in self.fields:
+            self.qgs_fields.append(field)
+
+        self.pr.addAttributes(self.qgs_fields)
         self.layer.updateFields()
 
         QgsProject.instance().addMapLayer(self.layer)
@@ -131,30 +135,20 @@ class VatsimAircraftLayer:
                 for pilot in pilots:
                     if pilot.cid == hidden_vatsim_id:
                         continue
-                    feat = QgsFeature()
-                    feat.setGeometry(QgsGeometry.fromPoint(
+                    pilot_feature = QgsFeature()
+                    pilot_feature.setFields(self.qgs_fields)
+                    pilot_feature.setGeometry(QgsGeometry.fromPoint(
                         QgsPoint(pilot.longitude, pilot.latitude, pilot.altitude)
                     ))
 
-                    # Set basic attributes (no flight plan data)
-                    feat.setAttributes([
-                        pilot.callsign,
-                        pilot.cid,
-                        pilot.name,
-                        pilot.latitude,
-                        pilot.longitude,
-                        pilot.altitude,
-                        pilot.heading,
-                        pilot.groundspeed,
-                        pilot.transponder,
-                        pilot.server,
-                        pilot.departure,
-                        pilot.arrival,
-                        pilot.aircraft,
-                        pilot.cruise,
-                        pilot.route
-                    ])
-                    features.append(feat)
+                    pilot_attributes = pilot.get_details()
+                    for attribute, value in pilot_attributes.items():
+                        field_index = pilot_feature.fields().indexFromName(attribute)
+                        if field_index == -1:
+                            continue
+                        pilot_feature.setAttribute(field_index, value)
+
+                    features.append(pilot_feature)
 
                 self.pr.addFeatures(features)
 
