@@ -4,7 +4,7 @@ import os
 from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtGui import QFont
 from qgis._core import QgsSymbolLayer, QgsProperty, QgsPalLayerSettings, QgsTextFormat, QgsTextBufferSettings, \
-    QgsVectorLayerSimpleLabeling, QgsFields, QgsMessageLog, Qgis
+    QgsVectorLayerSimpleLabeling, QgsFields, QgsMessageLog, Qgis, QgsFontMarkerSymbolLayer
 from qgis.core import (
     QgsVectorLayer,
     QgsFeature,
@@ -63,11 +63,15 @@ class VatsimAircraftLayer:
     def _apply_default_style(self, aircraft_colour: QColor):
         """Set a visual style (blue arrow for heading)."""
         symbol = QgsMarkerSymbol()
-        svg_layer = QgsSvgMarkerSymbolLayer(self.svg_path)
-        svg_layer.setSize(8)
-        svg_layer.setColor(aircraft_colour)
-        symbol.changeSymbolLayer(0, svg_layer)
-        rotation_property = QgsProperty.fromExpression("heading + 90")
+        font_layer = QgsFontMarkerSymbolLayer()
+        font_layer.setCharacter("")
+        font_layer.setFontFamily("Bravura Text")
+        font_layer.setSize(8)
+        font_layer.setColor(aircraft_colour)
+        font_layer.setStrokeColor(QColor('black'))
+        font_layer.setStrokeWidth(0.2)
+        symbol.changeSymbolLayer(0, font_layer)
+        rotation_property = QgsProperty.fromExpression("heading - 45")
         symbol.symbolLayer(0).setDataDefinedProperty(
             QgsSymbolLayer.Property.Angle,
             rotation_property
@@ -104,7 +108,7 @@ class VatsimAircraftLayer:
 
         # Apply labeling
         self.layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
-        self.layer.setLabelsEnabled(True)
+        self.layer.setLabelsEnabled(False)
 
         # Force visibility and style sync
         tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
