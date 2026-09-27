@@ -5,6 +5,7 @@
 [general]
 name=VATSIM Online
 qgisMinimumVersion=3.0
+qgisMaximumVersion=4.99
 description=This plugin plots the positions of users currently connected to VATSIM
 version=1.1
 author=Steven Brown
@@ -46,4 +47,4 @@ Category of the plugin: Raster, Vector, Database or Web
 server=False
 
 # QT6 Support
-supportsQt6=True
+#supportsQt6=True
