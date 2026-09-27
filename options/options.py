@@ -40,7 +40,7 @@ class OptionsManager:
         dialog = OptionsDialog(self._parent_window)
         self._restore_settings(dialog)
 
-        if dialog.exec_():  # OK pressed
+        if dialog.exec():  # OK pressed
             self._save_settings(dialog)
 
     def _restore_settings(self, dialog: OptionsDialog) -> None:

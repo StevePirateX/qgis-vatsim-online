@@ -15,7 +15,7 @@ class Ui_Options(object):
     def setupUi(self, Options):
         Options.setObjectName("Options")
         Options.resize(220, 160)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Options.sizePolicy().hasHeightForWidth())
@@ -27,12 +27,12 @@ class Ui_Options(object):
         self.gridLayoutWidget.setGeometry(QtCore.QRect(10, 10, 201, 153))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
         self.gridLayout = QtWidgets.QGridLayout(self.gridLayoutWidget)
-        self.gridLayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.gridLayout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetDefaultConstraint)
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
         self.gridLayout.setSpacing(6)
         self.gridLayout.setObjectName("gridLayout")
         self.lblRefreshRate = QtWidgets.QLabel(self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.lblRefreshRate.sizePolicy().hasHeightForWidth())
@@ -50,7 +50,7 @@ class Ui_Options(object):
         self.chkDebug.setObjectName("chkDebug")
         self.gridLayout.addWidget(self.chkDebug, 2, 1, 1, 1)
         self.lblDebug = QtWidgets.QLabel(self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.lblDebug.sizePolicy().hasHeightForWidth())
@@ -59,7 +59,7 @@ class Ui_Options(object):
         self.lblDebug.setObjectName("lblDebug")
         self.gridLayout.addWidget(self.lblDebug, 2, 0, 1, 1)
         self.label = QtWidgets.QLabel(self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
@@ -78,15 +78,15 @@ class Ui_Options(object):
         self.gridLayout.addWidget(self.spnVatsimId, 1, 1, 1, 1)
         self.buttonBox = QtWidgets.QDialogButtonBox(self.gridLayoutWidget)
         self.buttonBox.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.buttonBox.sizePolicy().hasHeightForWidth())
         self.buttonBox.setSizePolicy(sizePolicy)
         self.buttonBox.setMinimumSize(QtCore.QSize(0, 0))
-        self.buttonBox.setLayoutDirection(QtCore.Qt.LeftToRight)
-        self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.buttonBox.setOrientation(QtCore.Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.StandardButton.Cancel|QtWidgets.QDialogButtonBox.StandardButton.Ok)
         self.buttonBox.setCenterButtons(True)
         self.buttonBox.setObjectName("buttonBox")
         self.gridLayout.addWidget(self.buttonBox, 4, 0, 1, 2)
@@ -105,3 +105,21 @@ class Ui_Options(object):
         self.label.setText(_translate("Options", "VATSIM ID"))
         self.spnVatsimId.setToolTip(_translate("Options", "VATSIM ID to hide"))
         self.spnVatsimId.setWhatsThis(_translate("Options", "<html><head/><body><p>This allows you to specify a VATSIM ID to hide from the map.</p><p>This can be used if you are receiving your aircraft data from another source.</p></body></html>"))
+
+    def get_refresh_rate(self)->int:
+        return self.spnRefreshRate.value()
+
+    def set_refresh_rate(self, value:int):
+        self.spnRefreshRate.setValue(value)
+
+    def get_vatsim_id(self)->int:
+        return self.spnVatsimId.value()
+
+    def set_vatsim_id(self, value:int):
+        self.spnVatsimId.setValue(value)
+
+    def get_debug(self)->bool:
+        return self.chkDebug.isChecked()
+
+    def set_debug(self, value:bool):
+        self.chkDebug.setChecked(value)
