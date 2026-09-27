@@ -5,12 +5,14 @@ Interface layer between the VATSIM Online plugin and the Options dialog.
 Keeps QSettings persistence and dialog lifecycle out of the main plugin
 file — vatsim_online.py only needs to call OptionsManager.show_dialog().
 """
-from qgis.PyQt.QtCore import QSettings
+
 from qgis.PyQt.QtWidgets import QDialog
+from qgis._core import QgsSettings
+from sympy import false
 
 from .options_dialog import Ui_Options
 
-_SETTINGS_PREFIX = "VatsimOnline/options"
+_SETTINGS_PREFIX = "vatsim-online"
 
 
 class OptionsDialog(QDialog, Ui_Options):
@@ -33,7 +35,7 @@ class OptionsManager:
 
     def __init__(self, parent_window):
         self._parent_window = parent_window
-        self._settings = QSettings()
+        self._settings = QgsSettings()
 
     def show_dialog(self):
         """Open the Options dialog, pre-filled with saved values."""
@@ -49,6 +51,13 @@ class OptionsManager:
         # dialog.some_line_edit.setText(
         #     self._settings.value(f"{_SETTINGS_PREFIX}/some_value", "")
         # )
+        refresh_rate = self._settings.value(f"{_SETTINGS_PREFIX}/refresh-rate-sec", 15, type=int)
+        dialog.set_refresh_rate(refresh_rate)
+        vatsim_id = self._settings.value(f"{_SETTINGS_PREFIX}/vatsim-id", 0, type=int)
+        dialog.set_vatsim_id(vatsim_id)
+        debug = self._settings.value(f"{_SETTINGS_PREFIX}/debug", False, type=bool)
+        dialog.set_debug(debug)
+        print(f"Read Settings = Refresh={refresh_rate}; Vatsim ID={vatsim_id}; Debug={debug}")
         pass
 
     def _save_settings(self, dialog: OptionsDialog) -> None:
@@ -58,6 +67,9 @@ class OptionsManager:
         #     f"{_SETTINGS_PREFIX}/some_value",
         #     dialog.some_line_edit.text(),
         # )
+        self._settings.setValue(f"{_SETTINGS_PREFIX}/refresh-rate-sec",dialog.get_refresh_rate())
+        self._settings.setValue(f"{_SETTINGS_PREFIX}/vatsim-id",dialog.get_vatsim_id())
+        self._settings.setValue(f"{_SETTINGS_PREFIX}/debug", dialog.get_debug())
         pass
 
     def get(self, key: str, default=None, value_type=None):

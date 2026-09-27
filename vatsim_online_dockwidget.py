@@ -27,7 +27,7 @@ import os
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
-from qgis._core import QgsMessageLog, Qgis
+from qgis._core import QgsMessageLog, Qgis, QgsSettings
 
 from .vatsim_aircraft_layer import VatsimAircraftLayer
 from .vatsim_data import VatsimData
@@ -35,6 +35,8 @@ from .update_data_thread import VatsimUpdateThread
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     str(os.path.dirname(__file__)), 'vatsim_online_dockwidget_base.ui'))
+
+SETTINGS_PREFIX = "vatsim-online"
 
 class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
@@ -57,8 +59,10 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.vatsim_layer = None
         self.update_thread = None
         self.is_updating = False
-        self.debug = self.chkDebug.isChecked()
-        self.hidden_vatsim_id = self.spnVatsimId.value()
+        self.hide_vatsim_id = False
+
+        self.settings = QgsSettings()
+        self.fetch_settings()
 
 
     def closeEvent(self, event, **kwargs):
@@ -68,8 +72,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         event.accept()
 
 
-    def debug_update(self):
-        self.debug = self.chkDebug.isChecked()
+    def debug_update(self, debug: bool):
+        self.debug = debug
 
 
     def on_btn_get_data_released(self):
@@ -82,11 +86,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def _start_updating(self):
         """Start the auto-update thread."""
-        refresh_rate = self.spnRefreshRate.value()
-        hide_vatsim_id = self.chkHideVatsimId.isChecked()
-        self.hidden_vatsim_id = self.spnVatsimId.value()
-
-        hidden_vatsim_id = self.spnVatsimId.value() if hide_vatsim_id else 0
+        self.fetch_settings()
 
         # Setup UI
         self.is_updating = True
@@ -96,8 +96,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.update_thread = VatsimUpdateThread(
             self.vatsim_data,
             self.vatsim_layer,
-            refresh_rate,
-            hidden_vatsim_id,
+            self.refresh_rate,
+            self.hidden_vatsim_id,
             self.debug
         )
 
@@ -107,7 +107,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         # Start thread
         self.update_thread.start()
-        self._log_message(f"Started updates every {refresh_rate}s", Qgis.MessageLevel.Info)
+        self._log_message(f"Started updates every {self.refresh_rate}s", Qgis.MessageLevel.Info)
 
 
     def _stop_updating(self):
@@ -134,12 +134,15 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsMessageLog.logMessage(message, level=level)
 
 
+    def fetch_settings(self):
+        self.debug = self.settings.value(f"{SETTINGS_PREFIX}/debug", False, type=bool)
+        self.hidden_vatsim_id = self.settings.value(f"{SETTINGS_PREFIX}/vatsim-id", 0, type=int)
+        self.refresh_rate = self.settings.value(f"{SETTINGS_PREFIX}/refresh-rate-sec", 15, type=int)
+
+
     def update_ui_state(self):
-        self.spnRefreshRate.setEnabled(not self.is_updating)
         self.chkHideVatsimId.setEnabled(not self.is_updating)
-        self.spnVatsimId.setEnabled(not self.is_updating)
         self.mColorButton.setEnabled(not self.is_updating)
-        self.chkDebug.setEnabled(not self.is_updating)
 
         button_text = "Stop Updating" if self.is_updating else "Get Data"
         self.btnGetData.setText(button_text)
