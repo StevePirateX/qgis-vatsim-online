@@ -89,7 +89,7 @@ class VatsimAircraftLayer:
 
         # 2. Text formatting
         text_format = QgsTextFormat()
-        text_format.setFont(QFont("Arial", 8, QFont.Bold))
+        text_format.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         text_format.setColor(aircraft_colour)
 
         # Add text buffer (black outline)
