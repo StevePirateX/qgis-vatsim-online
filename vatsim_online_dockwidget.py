@@ -24,7 +24,7 @@
 
 import os
 
-from PyQt5.QtGui import QColor
+from qgis.PyQt.QtGui import QColor
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis._core import QgsMessageLog, Qgis
