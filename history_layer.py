@@ -4,7 +4,7 @@ from typing import List
 from qgis.PyQt.QtCore import QDateTime, QMetaType
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVectorFileWriter, QgsMarkerSymbol, \
-    QgsSvgMarkerSymbolLayer, QgsSymbolLayer, QgsProperty, QgsSingleSymbolRenderer, QgsPalLayerSettings, QgsTextFormat, \
+    QgsFontMarkerSymbolLayer, QgsSymbolLayer, QgsProperty, QgsSingleSymbolRenderer, QgsPalLayerSettings, QgsTextFormat, \
     QgsTextBufferSettings, QgsVectorLayerSimpleLabeling, QgsFeature, QgsGeometry, QgsPoint, QgsMessageLog, Qgis
 from qgis.core import edit
 
@@ -123,11 +123,15 @@ class HistoryLayer:
     def _apply_default_style(self, aircraft_colour: QColor=QColor(0,255,255)):
         """Set a visual style (blue arrow for heading)."""
         symbol = QgsMarkerSymbol()
-        svg_layer = QgsSvgMarkerSymbolLayer(self.svg_path)
-        svg_layer.setSize(8)
-        svg_layer.setColor(aircraft_colour)
-        symbol.changeSymbolLayer(0, svg_layer)
-        rotation_property = QgsProperty.fromExpression("heading + 90")
+        font_layer = QgsFontMarkerSymbolLayer()
+        font_layer.setCharacter("")
+        font_layer.setFontFamily("Bravura Text")
+        font_layer.setSize(8)
+        font_layer.setColor(aircraft_colour)
+        font_layer.setStrokeColor(QColor('black'))
+        font_layer.setStrokeWidth(0.2)
+        symbol.changeSymbolLayer(0, font_layer)
+        rotation_property = QgsProperty.fromExpression("heading - 45")
         symbol.symbolLayer(0).setDataDefinedProperty(
             QgsSymbolLayer.Property.Angle,
             rotation_property
