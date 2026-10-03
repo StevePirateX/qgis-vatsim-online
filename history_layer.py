@@ -5,7 +5,7 @@ from qgis.PyQt.QtCore import QDateTime, QMetaType
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVectorFileWriter, QgsMarkerSymbol, \
     QgsSvgMarkerSymbolLayer, QgsSymbolLayer, QgsProperty, QgsSingleSymbolRenderer, QgsPalLayerSettings, QgsTextFormat, \
-    QgsTextBufferSettings, QgsVectorLayerSimpleLabeling, QgsFeature, QgsGeometry, QgsPoint
+    QgsTextBufferSettings, QgsVectorLayerSimpleLabeling, QgsFeature, QgsGeometry, QgsPoint, QgsMessageLog, Qgis
 from qgis.core import edit
 
 from .pilot import Pilot
@@ -36,9 +36,10 @@ class HistoryLayer:
         :param pretty_name: Layer name that will be displayed in the layer panel
         :param crs: CRS of the layer
         """
-        if gpkg_path is None:
+        if not gpkg_path.endswith('.gpkg'):
             project_path = QgsProject.instance().homePath()
-            gpkg_path = os.path.join(project_path, 'History.gpkg')
+            gpkg_path = os.path.join(project_path, 'vatsim-history.gpkg')
+            QgsMessageLog.logMessage(f"No geopackage path specified. Using default path: {gpkg_path}", level=Qgis.MessageLevel.Info)
 
         self.gpkg_path = gpkg_path
         self.table_name = table_name

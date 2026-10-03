@@ -177,6 +177,6 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
 
         if self.history_be_recorded() and self.is_updating:
-            self.history_layer = HistoryLayer()
+            self.history_layer = HistoryLayer(gpkg_path=self.mHistoryFile.filePath())
         else:
             self.history_layer = None
