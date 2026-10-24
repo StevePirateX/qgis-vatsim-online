@@ -25,13 +25,12 @@
 import os
 from pathlib import Path
 
-from qgis.PyQt.QtGui import QColor
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
-from qgis._core import QgsMessageLog, Qgis, QgsSettings, QgsProject
-from dotenv import load_dotenv, dotenv_values
+from qgis.core import QgsMessageLog, Qgis, QgsSettings, QgsProject
+from dotenv import load_dotenv
 
-from.history_layer import HistoryLayer
+from .history_layer import HistoryLayer, HistoryWriter
 from .live_aircraft_layer import VatsimAircraftLayer
 from .vatsim_data import VatsimData
 from .update_data_thread import VatsimUpdateThread
@@ -44,6 +43,7 @@ SETTINGS_PREFIX = "vatsim-online"
 plugin_dir = Path(__file__).resolve().parent
 env_path = plugin_dir / '.env'
 load_dotenv(dotenv_path=env_path)
+
 
 class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
@@ -80,13 +80,11 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 layer_source = layer_uri.source().partition('|')[0]
                 self.mHistoryFile.setFilePath(layer_source)
 
-
     def closeEvent(self, event, **kwargs):
         if self.is_updating:
             self._stop_updating()
         self.closingPlugin.emit()
         event.accept()
-
 
     def debug_update(self, debug: bool):
         self.debug = debug
@@ -101,63 +99,70 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         else:
             self._start_updating()
 
-
     def _start_updating(self):
         """Start the auto-update thread."""
         self.fetch_settings()
 
-        # Setup UI
+        # Setup UI (this also creates the live layer and, if enabled, the history layer)
         self.is_updating = True
         self.update_ui_state()
 
-        # Create and configure thread
+        # The worker thread never touches a QGIS layer. History is written by a
+        # plain OGR connection that lives entirely inside the worker thread.
+        history_writer = None
+        if self.history_layer is not None:
+            history_writer = HistoryWriter(self.history_layer.gpkg_path,
+                                           self.history_layer.table_name)
+
         self.update_thread = VatsimUpdateThread(
             self.vatsim_data,
-            self.vatsim_layer,
             self.refresh_rate,
-            self.history_layer,
-            self.hidden_vatsim_id,
+            history_writer,
             self.debug
         )
 
-        # Connect signals
-        self.update_thread.update_complete.connect(self._handle_update_result)
+        # Connect signals (queued automatically, so the slots run on the main thread)
+        self.update_thread.data_ready.connect(self._apply_data)
         self.update_thread.log_message.connect(self._log_message)
 
         # Start thread
         self.update_thread.start()
         self._log_message(f"Started updates every {self.refresh_rate}s", Qgis.MessageLevel.Info)
 
-
     def _stop_updating(self):
         """Stop the auto-update thread."""
         if self.update_thread:
-            self.update_thread.stop()
+            self.update_thread.stop()   # waits for the worker (and any history write) to finish
             self.update_thread = None
+
+        # The worker wrote history through its own connection; refresh only if it's on screen
+        if self.history_layer is not None:
+            self.history_layer.refresh_if_visible()
 
         # Reset UI
         self.is_updating = False
         self.update_ui_state()
         self._log_message("Updates stopped", Qgis.MessageLevel.Info)
 
-
-    def _handle_update_result(self, success):
-        """Handle completion of an update cycle."""
-        # Can add post-update logic here if needed
-        pass
-
+    def _apply_data(self, pilots):
+        """Apply a fresh VATSIM snapshot to the live layer. Runs on the main thread."""
+        if not self.is_updating or self.vatsim_layer is None:
+            return  # a queued update can arrive just after Stop was pressed
+        result = self.vatsim_layer.apply_snapshot(pilots, self.hidden_vatsim_id)
+        if result and self.debug:
+            self._log_message("Update complete", Qgis.MessageLevel.Success)
 
     @staticmethod
-    def _log_message(message, level: Qgis.MessageLevel=Qgis.MessageLevel.Info):
-        """Thread-safe logging."""
+    def _log_message(message, level=Qgis.MessageLevel.Info):
+        """Logging slot; the worker thread sends the level as an int."""
+        if not isinstance(level, Qgis.MessageLevel):
+            level = Qgis.MessageLevel(level)
         QgsMessageLog.logMessage(message, level=level)
-
 
     def fetch_settings(self):
         self.debug = self.settings.value(f"{SETTINGS_PREFIX}/debug", False, type=bool)
         self.hidden_vatsim_id = self.settings.value(f"{SETTINGS_PREFIX}/vatsim-id", 0, type=int)
         self.refresh_rate = self.settings.value(f"{SETTINGS_PREFIX}/refresh-rate-sec", 15, type=int)
-
 
     def update_ui_state(self):
         self.chkHideVatsimId.setEnabled(not self.is_updating)
@@ -171,8 +176,10 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnGetData.setStyleSheet(button_style)
 
         if not self.is_updating:
-            self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
-            self.history_layer.create_spatial_index() if self.history_be_recorded() else None
+            if self.vatsim_layer is not None:
+                self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
+            if self.history_layer is not None and self.history_be_recorded():
+                self.history_layer.create_spatial_index()
 
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
 

@@ -1,18 +1,33 @@
 import os
 from typing import List
 
-from qgis.PyQt.QtCore import QDateTime, QMetaType
-from qgis.PyQt.QtGui import QColor, QFont
-from qgis._core import QgsVectorLayer, QgsProject, QgsFields, QgsField, QgsVectorFileWriter, QgsMarkerSymbol, \
-    QgsFontMarkerSymbolLayer, QgsSymbolLayer, QgsProperty, QgsSingleSymbolRenderer, QgsPalLayerSettings, QgsTextFormat, \
-    QgsTextBufferSettings, QgsVectorLayerSimpleLabeling, QgsFeature, QgsGeometry, QgsPoint, QgsMessageLog, Qgis
-from qgis.core import edit
+from osgeo import ogr, gdal
+
+from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtGui import QColor
+from qgis.core import (
+    QgsVectorLayer,
+    QgsProject,
+    QgsField,
+    QgsVectorFileWriter,
+    QgsMarkerSymbol,
+    QgsSingleSymbolRenderer,
+    QgsMessageLog,
+    Qgis,
+)
 
 from .pilot import Pilot
-from .live_aircraft_layer import VatsimAircraftLayer
 
 TABLE_NAME = 'vatsim_history'
 PRETTY_NAME = "VATSIM History"
+
+# The history layer only draws when the map is zoomed in past this scale denominator
+# (1:10,000,000 here). Set to None to draw at every scale.
+HISTORY_MIN_SCALE = 10_000_000
+
+# Pilots slower than this (knots) are not recorded, so aircraft parked at airports don't
+# add thousands of identical stacked points every cycle. Set to 0 to record everything.
+MIN_RECORD_GROUNDSPEED = 30
 
 FIELDS = [
     QgsField("callsign", QMetaType.Type.QString, len=9),
@@ -25,9 +40,16 @@ FIELDS = [
     QgsField("timestamp", QMetaType.Type.QDateTime)
 ]
 
-class HistoryLayer:
 
-    def __init__(self, gpkg_path: str=None, table_name=TABLE_NAME, pretty_name: str=PRETTY_NAME, crs="EPSG:4326", svg_name: str="aircraft.svg"):
+class HistoryLayer:
+    """The QGIS-side view of the history table. MAIN THREAD ONLY.
+
+    Writing is done by HistoryWriter (below), which uses its own OGR connection
+    inside the worker thread and never touches this layer.
+    """
+
+    def __init__(self, gpkg_path: str = None, table_name=TABLE_NAME, pretty_name: str = PRETTY_NAME,
+                 crs="EPSG:4326", svg_name: str = "aircraft.svg"):
         """
         Initialise the history layer
 
@@ -36,25 +58,26 @@ class HistoryLayer:
         :param pretty_name: Layer name that will be displayed in the layer panel
         :param crs: CRS of the layer
         """
-        if not gpkg_path.endswith('.gpkg'):
+        if not gpkg_path or not gpkg_path.endswith('.gpkg'):
             project_path = QgsProject.instance().homePath()
             gpkg_path = os.path.join(project_path, 'vatsim-history.gpkg')
-            QgsMessageLog.logMessage(f"No geopackage path specified. Using default path: {gpkg_path}", level=Qgis.MessageLevel.Info)
+            QgsMessageLog.logMessage(f"No geopackage path specified. Using default path: {gpkg_path}",
+                                     level=Qgis.MessageLevel.Info)
 
         self.gpkg_path = gpkg_path
         self.table_name = table_name
         self.pretty_name = pretty_name
         self.crs = crs
 
-        plugin_dir = os.path.dirname(__file__)  # Path to psx_vector_layer.py
+        plugin_dir = os.path.dirname(__file__)
         self.svg_path = os.path.join(plugin_dir, svg_name)
 
         # Ensure .gpkg extension
         if not self.gpkg_path.lower().endswith('.gpkg'):
-           self.gpkg_path += '.gpkg'
+            self.gpkg_path += '.gpkg'
 
         # First check if layer already exists in project
-        existing_layer = HistoryLayer.find_existing_layer(path=gpkg_path)
+        existing_layer = HistoryLayer.find_existing_layer(path=self.gpkg_path)
 
         if existing_layer:
             self.layer = existing_layer
@@ -64,22 +87,18 @@ class HistoryLayer:
             QgsProject.instance().addMapLayer(self.layer)
             self._apply_default_style()
 
-        # Initialize feature tracking
         self.pr = self.layer.dataProvider()
-        self.current_feature = None
-        self.points = []
-
 
     @staticmethod
-    def find_existing_layer(path: str="", project: QgsProject=QgsProject.instance()) -> QgsVectorLayer|None:
+    def find_existing_layer(path: str = "", project: QgsProject = None) -> QgsVectorLayer | None:
         """Check if layer already exists in project."""
+        project = project or QgsProject.instance()
         for layer in project.mapLayers().values():
             if (isinstance(layer, QgsVectorLayer) and
                     ((layer.dataProvider().dataSourceUri().startswith(path) or len(path) == 0) and
                      layer.name() == PRETTY_NAME)):
                 return layer
         return None
-
 
     def _load_or_create_layer(self, crs: str) -> QgsVectorLayer:
         """Load from GeoPackage or create new layer if needed."""
@@ -92,21 +111,14 @@ class HistoryLayer:
         return layer
 
     def _create_layer_in_geopackage(self, crs: str) -> QgsVectorLayer:
-        """Create a new LineStringZ layer in the GeoPackage."""
-        # Create a temporary memory layer with correct schema
+        """Create a new PointZ table in the GeoPackage."""
         temp_layer = QgsVectorLayer(f"PointZ?crs={crs}", "temp", "memory")
-        temp_layer.startEditing()
-
-        # Add fields
-        history_fields = FIELDS
-        temp_layer.dataProvider().addAttributes(history_fields)
+        temp_layer.dataProvider().addAttributes(FIELDS)
         temp_layer.updateFields()
 
-        # Save to GeoPackage
         options = QgsVectorFileWriter.SaveVectorOptions()
         options.driverName = "GPKG"
         options.layerName = self.table_name
-        # options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
 
         error = QgsVectorFileWriter.writeAsVectorFormatV3(
             layer=temp_layer,
@@ -120,112 +132,131 @@ class HistoryLayer:
 
         return QgsVectorLayer(f"{self.gpkg_path}|layername={self.table_name}", self.pretty_name, "ogr")
 
-    def _apply_default_style(self, aircraft_colour: QColor=QColor(0,255,255)):
-        """Set a visual style (blue arrow for heading)."""
-        symbol = QgsMarkerSymbol()
-        font_layer = QgsFontMarkerSymbolLayer()
-        font_layer.setCharacter("")
-        font_layer.setFontFamily("Bravura Text")
-        font_layer.setSize(8)
-        font_layer.setColor(aircraft_colour)
-        font_layer.setStrokeColor(QColor('black'))
-        font_layer.setStrokeWidth(0.2)
-        symbol.changeSymbolLayer(0, font_layer)
-        rotation_property = QgsProperty.fromExpression("heading - 45")
-        symbol.symbolLayer(0).setDataDefinedProperty(
-            QgsSymbolLayer.Property.Angle,
-            rotation_property
-        )
+    def _apply_default_style(self, aircraft_colour: QColor = QColor(0, 255, 255)):
+        """A deliberately cheap style: small flat circles, no font glyph, no rotation, no labels.
 
-        self.renderer = QgsSingleSymbolRenderer(symbol)
-        self.layer.setRenderer(self.renderer)
-
-        """Configure default label styling for the layer."""
-        label_settings = QgsPalLayerSettings()
-
-        # 1. Label content (using 'id' and 'speed' fields)
-        label_settings.fieldName = "concat(callsign, \'\\n\', lpad(altitude//100,3,0), \'   \', lpad(groundspeed//10,2,0))"
-        label_settings.isExpression = True
-
-        # 2. Text formatting
-        text_format = QgsTextFormat()
-        text_format.setFont(QFont("Arial", 8, QFont.Weight.Bold))
-        text_format.setColor(aircraft_colour)
-
-        # Add text buffer (black outline)
-        buffer_settings = QgsTextBufferSettings()
-        buffer_settings.setEnabled(True)
-        buffer_settings.setSize(0.8)
-        buffer_settings.setColor(QColor(0, 0, 0))
-        text_format.setBuffer(buffer_settings)
-
-        label_settings.setFormat(text_format)
-
-        # 3. Label placement
-        # label_settings.placement = QgsPalLayerSettings.AroundPoint
-        label_settings.dist = 5.0  # 2mm offset from point
-        label_settings.quadOffset = QgsPalLayerSettings.QuadrantLeft  # Left side
-
-        # Apply labeling
-        self.layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
+        The history layer can hold hundreds of thousands of points, so anything expensive per
+        point (font markers, data-defined rotation, outlines, labels) makes the canvas crawl.
+        """
+        colour = QColor(aircraft_colour)
+        colour.setAlpha(160)
+        symbol = QgsMarkerSymbol.createSimple({
+            'name': 'circle',
+            'size': '1.0',
+            'color': colour.name(QColor.NameFormat.HexArgb),
+            'outline_style': 'no',
+        })
+        self.layer.setRenderer(QgsSingleSymbolRenderer(symbol))
         self.layer.setLabelsEnabled(False)
 
-        # Force visibility and style sync
+        # Only draw when zoomed in enough for the points to be useful
+        if HISTORY_MIN_SCALE:
+            self.layer.setScaleBasedVisibility(True)
+            self.layer.setMinimumScale(HISTORY_MIN_SCALE)
+
+        # Hidden by default
         tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
         if tree_layer:
             tree_layer.setItemVisibilityChecked(False)
 
-        # Mark layer as modified to force refresh
         self.layer.triggerRepaint()
-        self.layer.reload()
-
-    def add_pilot_positions(self, pilots: List[Pilot], timestamp):
-        try:
-            with edit(self.layer):
-
-                features = []
-                for pilot in pilots:
-                    feat = QgsFeature()
-                    feat.setGeometry(QgsGeometry.fromPoint(
-                        QgsPoint(pilot.longitude, pilot.latitude, pilot.altitude)
-                    ))
-                    # Set basic attributes (no flight plan data)
-                    feat.setAttributes([
-                        None,
-                        pilot.callsign,
-                        pilot.cid,
-                        pilot.heading,
-                        pilot.groundspeed,
-                        pilot.departure,
-                        pilot.arrival,
-                        pilot.aircraft,
-                        timestamp
-                    ])
-                    features.append(feat)
-
-                self.pr.addFeatures(features)
-            self.layer.triggerRepaint()
-            #self.layer.dataProvider().reloadData()
-
-            return True
-
-        except Exception as e:
-            print(f"Error during full refresh: {e}")
-            return False
 
     def remove_layer(self):
         """Remove the layer from QGIS."""
         QgsProject.instance().removeMapLayer(self.layer.id())
 
+    def refresh_if_visible(self):
+        """Re-read the table after recording, but only pay for it if the layer is on screen.
+
+        If the layer is hidden when you stop, QGIS will pick up the new rows when you turn it
+        on (use Layer > Refresh, or F5, if it ever looks stale).
+        """
+        tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
+        if tree_layer and tree_layer.isVisible():
+            self.layer.dataProvider().reloadData()
+            self.layer.triggerRepaint()
+
     def create_spatial_index(self):
-        if self.layer.isEditable():
-            self.layer.commitChanges()
-
-        # Create the spatial index via the data provider
-        if not self.layer.dataProvider().hasSpatialIndex():
-            self.layer.dataProvider().createSpatialIndex()
-
-        self.layer.triggerRepaint()
+        """Create a spatial index only if one is missing (GeoPackages normally already have one)."""
+        provider = self.layer.dataProvider()
+        presence = provider.hasSpatialIndex()
+        # Enum names differ between QGIS versions ("SpatialIndexNotPresent" / "NotPresent")
+        if 'NotPresent' in getattr(presence, 'name', str(presence)):
+            provider.createSpatialIndex()
 
 
+class HistoryWriter:
+    """Appends pilot positions to the history table using a plain OGR connection.
 
+    open(), write() and close() must all be called from the SAME worker thread. It never
+    touches a QgsVectorLayer, so it cannot block or race with the QGIS main thread.
+    """
+
+    def __init__(self, gpkg_path: str, table_name: str = TABLE_NAME,
+                 min_groundspeed: int = MIN_RECORD_GROUNDSPEED, record_every_n: int = 1):
+        """
+        :param min_groundspeed: skip pilots slower than this (knots)
+        :param record_every_n: only record every Nth snapshot (1 = every update, 2 = every
+            other update, and so on) to thin the history further
+        """
+        self.gpkg_path = gpkg_path
+        self.table_name = table_name
+        self.min_groundspeed = min_groundspeed
+        self.record_every_n = max(1, record_every_n)
+        self._count = 0
+        self.ds = None
+        self.layer = None
+        self.idx = {}
+
+    def open(self):
+        # WAL lets QGIS read the file while we write. Thread-local, so it doesn't change
+        # anything for the rest of QGIS.
+        gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
+        self.ds = ogr.Open(self.gpkg_path, update=1)
+        if self.ds is None:
+            raise RuntimeError(f"Could not open GeoPackage for writing: {self.gpkg_path}")
+        self.layer = self.ds.GetLayerByName(self.table_name)
+        if self.layer is None:
+            raise RuntimeError(f"Table '{self.table_name}' not found in {self.gpkg_path}")
+        defn = self.layer.GetLayerDefn()
+        self.idx = {defn.GetFieldDefn(i).GetName(): i for i in range(defn.GetFieldCount())}
+
+    def write(self, pilots: List[Pilot], timestamp: str) -> int:
+        """Insert one snapshot in a single transaction. Returns the number of rows written."""
+        self._count += 1
+        if (self._count - 1) % self.record_every_n != 0:
+            return 0
+
+        defn = self.layer.GetLayerDefn()
+        idx = self.idx
+        written = 0
+
+        self.layer.StartTransaction()
+        try:
+            for p in pilots:
+                if p.groundspeed < self.min_groundspeed:
+                    continue
+                feature = ogr.Feature(defn)
+                point = ogr.Geometry(ogr.wkbPoint25D)
+                point.AddPoint(p.longitude, p.latitude, p.altitude)
+                feature.SetGeometry(point)
+                feature.SetField(idx["callsign"], p.callsign)
+                feature.SetField(idx["cid"], p.cid)
+                feature.SetField(idx["heading"], p.heading)
+                feature.SetField(idx["groundspeed"], p.groundspeed)
+                feature.SetField(idx["departure"], p.departure)
+                feature.SetField(idx["arrival"], p.arrival)
+                feature.SetField(idx["aircraft"], p.aircraft)
+                feature.SetField(idx["timestamp"], timestamp)
+                self.layer.CreateFeature(feature)
+                written += 1
+            self.layer.CommitTransaction()
+        except Exception:
+            self.layer.RollbackTransaction()
+            raise
+        return written
+
+    def close(self):
+        self.layer = None
+        self.ds = None  # closing the dataset flushes everything to disk
+        gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", None)

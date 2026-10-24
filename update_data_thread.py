@@ -1,72 +1,47 @@
 import time
-from qgis.PyQt.QtCore import pyqtSignal, QThread, QMutex
-from qgis._core import Qgis
-
-from .live_aircraft_layer import VatsimAircraftLayer
-from .history_layer import HistoryLayer
+from datetime import datetime
+from qgis.PyQt.QtCore import pyqtSignal, QThread
+from qgis.core import Qgis
 
 class VatsimUpdateThread(QThread):
-    update_complete = pyqtSignal(bool)  # Signal to indicate update completion
-    log_message = pyqtSignal(str, int)  # For thread-safe logging
+    data_ready = pyqtSignal(object)      # list[Pilot]
+    log_message = pyqtSignal(str, int)
 
-    def __init__(self, vatsim_data, vatsim_layer, refresh_rate, history_layer:HistoryLayer=None, hide_vatsim_id: int=0, debug: bool=False):
+    def __init__(self, vatsim_data, refresh_rate, history_writer=None, debug=False):
         super().__init__()
         self.vatsim_data = vatsim_data
-        self.vatsim_layer = vatsim_layer
-        self.history_layer = history_layer
         self.refresh_rate = refresh_rate
-        self._mutex = QMutex()
-        self._running = False
-        self.hidden_vatsim_id = hide_vatsim_id
+        self.history_writer = history_writer
         self.debug = debug
+        self._running = False
 
     def run(self):
         self._running = True
-        while self._running:
-            start_time = time.time()
-
-            try:
-                # Perform the update in this thread
-                success = self._perform_update()
-                self.update_complete.emit(success)
-            except Exception as e:
-                self.log_message.emit(f"Thread error: {str(e)}", Qgis.MessageLevel.Critical)
-
-            # Calculate remaining time to sleep
-            elapsed = time.time() - start_time
-            sleep_time = max(0, self.refresh_rate - elapsed)
-
-            # Sleep in chunks so we can respond to stop requests
-            for _ in range(int(sleep_time * 10)):
-                if not self._running:
-                    return
-                time.sleep(0.1)
-
-    def _perform_update(self):
-        """Actual update logic that runs in the background thread."""
+        previous_timestamp = None
         try:
-            if self.debug:
-                self.log_message.emit("Fetching VATSIM data...", Qgis.Info)
+            if self.history_writer:
+                self.history_writer.open()
+            while self._running:
+                start = time.time()
+                try:
+                    self.vatsim_data.fetch_vatsim_data()
+                    timestamp = self.vatsim_data.timestamp
+                    if timestamp != previous_timestamp:
+                        previous_timestamp = timestamp
+                        pilots = self.vatsim_data.pilots
+                        self.data_ready.emit(pilots)
+                        if self.history_writer:
+                            self.history_writer.write(pilots, self.vatsim_data.get_update_time())
+                except Exception as e:
+                    self.log_message.emit(f"Update failed: {e}", int(Qgis.MessageLevel.Critical))
 
-            self.vatsim_data.fetch_vatsim_data()
-
-            # Lock mutex for layer operations
-            self._mutex.lock()
-            try:
-                result = self.vatsim_layer.full_refresh(self.vatsim_data.pilots, self.hidden_vatsim_id)
-                if result and self.debug:
-                    self.log_message.emit("Update complete", Qgis.MessageLevel.Success)
-                if self.history_layer is not None:
-                    self.history_layer.add_pilot_positions(self.vatsim_data.pilots, self.vatsim_data.get_update_time())
-                return result
-            finally:
-                self._mutex.unlock()
-
-        except Exception as e:
-            self.log_message.emit(f"Update failed: {str(e)}", Qgis.MessageLevel.Critical)
-            return False
+                end = start + self.refresh_rate
+                while self._running and time.time() < end:
+                    self.msleep(100)
+        finally:
+            if self.history_writer:
+                self.history_writer.close()
 
     def stop(self):
-        """Safely stop the thread."""
         self._running = False
         self.wait()
