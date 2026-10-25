@@ -28,12 +28,17 @@ class VatsimUpdateThread(QThread):
     def _log(self, message, level=Qgis.MessageLevel.Info):
         self.log_message.emit(message, int(level))
 
+    def _writer_log(self, message, critical=False):
+        """Logger handed to the history writer (may be called from its own helper thread)."""
+        self._log(message, Qgis.MessageLevel.Critical if critical else Qgis.MessageLevel.Info)
+
     def run(self):
         self._running = True
         last_ts = None
         try:
             if self.history_writer:
-                self.history_writer.open()      # the OGR dataset lives in this thread
+                self.history_writer.set_logger(self._writer_log, self.debug)
+                self.history_writer.open()
             while self._running:
                 start = time.perf_counter()
                 try:
@@ -57,15 +62,22 @@ class VatsimUpdateThread(QThread):
                         t_done = time.perf_counter()
 
                         if self.debug:
-                            detail = ""
-                            timing = getattr(self.history_writer, "last_timing", None)
-                            if timing:
-                                detail = (f" [begin {1000 * timing[0]:.0f} / insert {1000 * timing[1]:.0f}"
-                                          f" / commit {1000 * timing[2]:.0f} ms]")
+                            history_ms = 1000 * (t_done - t_prepare)
+                            if getattr(self.history_writer, "in_process", False):
+                                skipped = self.history_writer.last_skipped
+                                detail = ""
+                                timing = self.history_writer.last_timing
+                                if timing:
+                                    detail = (f" [begin {1000 * timing[0]:.0f} / insert {1000 * timing[1]:.0f}"
+                                              f" / commit {1000 * timing[2]:.0f} ms]")
+                                history_text = (f"history {history_ms:.0f} ms ({written} rows, "
+                                                f"{skipped} unchanged skipped){detail}")
+                            else:
+                                # separate recorder process: the write itself is reported by the recorder
+                                history_text = f"history handoff {history_ms:.0f} ms"
                             self._log(
                                 f"worker: fetch+parse {1000 * (t_fetch - start):.0f} ms, "
-                                f"prepare {1000 * (t_prepare - t_fetch):.0f} ms, "
-                                f"history {1000 * (t_done - t_prepare):.0f} ms ({written} rows){detail}"
+                                f"prepare {1000 * (t_prepare - t_fetch):.0f} ms, {history_text}"
                             )
                 except Exception as e:
                     self._log(f"Update failed: {e}", Qgis.MessageLevel.Critical)
