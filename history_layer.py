@@ -29,7 +29,7 @@ HISTORY_MIN_SCALE = 10_000_000
 
 # Pilots slower than this (knots) are not recorded, so aircraft parked at airports don't
 # add thousands of identical stacked points every cycle. Set to 0 to record everything.
-MIN_RECORD_GROUNDSPEED = 30
+MIN_RECORD_GROUNDSPEED = 1
 
 # Write-ahead logging lets QGIS read the file while the worker writes. If history writes are
 # slow, try False to see whether journal mode is involved.
