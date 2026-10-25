@@ -1,5 +1,4 @@
 import os
-from typing import List
 
 from qgis.PyQt.QtCore import QMetaType, QDateTime
 from qgis.PyQt.QtGui import QColor, QFont
@@ -20,9 +19,9 @@ from qgis.core import (
     QgsTextFormat,
     QgsTextBufferSettings,
     QgsVectorLayerSimpleLabeling,
+    QgsMessageLog,
+    Qgis,
 )
-
-from .pilot import Pilot
 
 # IMPORTANT: the aircraft glyph is a private-use character from the Bravura font and
 # may not have survived copy/paste. Paste the exact character from your original
@@ -50,6 +49,17 @@ class VatsimAircraftLayer:
         QgsField("timestamp", QMetaType.Type.QDateTime),
     ]
 
+    # Field order/indices are fixed by FIELDS, so the worker thread can use them without
+    # ever touching a layer.
+    FIELD_NAMES = [f.name() for f in FIELDS]
+    FIELD_IDX = {name: i for i, name in enumerate(FIELD_NAMES)}
+
+    # Updated on every refresh
+    DYNAMIC_FIELDS = ("latitude", "longitude", "altitude", "heading", "groundspeed",
+                      "transponder", "timestamp")
+    # Only rewritten when they actually change (the route strings are long)
+    FLIGHTPLAN_FIELDS = ("departure", "arrival", "aircraft", "cruise", "route")
+
     def __init__(self, aircraft_colour: QColor, layer_name="VATSIM Data", crs="EPSG:4326",
                  svg_name="aircraft.svg", save_history=False):
         """Initialize a memory layer for live point updates. MAIN THREAD ONLY."""
@@ -66,10 +76,8 @@ class VatsimAircraftLayer:
         self.pr.addAttributes(self.qgs_fields)
         self.layer.updateFields()
 
-        # Cached lookups so the refresh never has to iterate the layer
-        self.field_names = [f.name() for f in self.layer.fields()]
-        self.field_idx = {name: i for i, name in enumerate(self.field_names)}
         self.fid_by_callsign = {}  # callsign -> QGIS feature id
+        self._fp_sig = {}          # callsign -> last written flight plan values
 
         QgsProject.instance().addMapLayer(self.layer)
         self._apply_default_style(aircraft_colour=aircraft_colour)
@@ -78,20 +86,28 @@ class VatsimAircraftLayer:
 
     def _apply_default_style(self, aircraft_colour: QColor):
         """Set a visual style (arrow rotated by heading) and default label settings."""
-        symbol = QgsMarkerSymbol()
-        font_layer = QgsFontMarkerSymbolLayer()
-        font_layer.setCharacter(AIRCRAFT_GLYPH)
-        font_layer.setFontFamily("Bravura Text")
-        font_layer.setSize(8)
-        font_layer.setColor(aircraft_colour)
-        font_layer.setStrokeColor(QColor('black'))
-        font_layer.setStrokeWidth(0.2)
-        symbol.changeSymbolLayer(0, font_layer)
-        rotation_property = QgsProperty.fromExpression("heading - 45")
-        symbol.symbolLayer(0).setDataDefinedProperty(
-            QgsSymbolLayer.Property.Angle,
-            rotation_property
-        )
+        if AIRCRAFT_GLYPH:
+            symbol = QgsMarkerSymbol()
+            font_layer = QgsFontMarkerSymbolLayer()
+            font_layer.setCharacter(AIRCRAFT_GLYPH)
+            font_layer.setFontFamily("Bravura Text")
+            font_layer.setSize(8)
+            font_layer.setColor(aircraft_colour)
+            font_layer.setStrokeColor(QColor('black'))
+            font_layer.setStrokeWidth(0.2)
+            symbol.changeSymbolLayer(0, font_layer)
+            rotation_property = QgsProperty.fromExpression("heading - 45")
+            symbol.symbolLayer(0).setDataDefinedProperty(
+                QgsSymbolLayer.Property.Angle,
+                rotation_property
+            )
+        else:
+            # No glyph set: an empty font marker draws nothing, so fall back to a visible arrow
+            symbol = QgsMarkerSymbol.createSimple({
+                'name': 'arrow', 'size': '5',
+                'color': aircraft_colour.name(), 'outline_color': 'black',
+            })
+            symbol.setDataDefinedAngle(QgsProperty.fromExpression("heading"))
 
         self.renderer = QgsSingleSymbolRenderer(symbol)
         self.layer.setRenderer(self.renderer)
@@ -126,79 +142,88 @@ class VatsimAircraftLayer:
         self.layer.triggerRepaint()
 
     @staticmethod
-    def _values(pilot: Pilot, timestamp: QDateTime) -> dict:
-        """Attribute values for one pilot, keyed by layer field name."""
-        return dict(
-            callsign=pilot.callsign,
-            cid=pilot.cid,
-            name=pilot.name,
-            latitude=pilot.latitude,
-            longitude=pilot.longitude,
-            altitude=pilot.altitude,
-            heading=pilot.heading,
-            groundspeed=pilot.groundspeed,
-            transponder=pilot.transponder,
-            server=pilot.server,
-            departure=pilot.departure,
-            arrival=pilot.arrival,
-            aircraft=pilot.aircraft,
-            cruise=pilot.cruise,
-            route=pilot.route,
-            timestamp=timestamp,
-        )
-
-    @staticmethod
-    def _geometry(pilot: Pilot) -> QgsGeometry:
-        return QgsGeometry(QgsPoint(pilot.longitude, pilot.latitude, pilot.altitude))
-
-    def apply_snapshot(self, pilots: List[Pilot], hidden_vatsim_id: int = 0) -> bool:
+    def prepare_snapshot(pilots, hidden_vatsim_id: int = 0) -> dict:
         """
-        Sync the layer with the latest list of pilots. MAIN THREAD ONLY.
+        Build everything the layer needs from a list of pilots, WITHOUT touching a layer.
 
-        Every provider operation is a single batched call, and the layer is only
-        repainted once at the end.
+        Safe to call from the worker thread: it only creates plain Python data plus
+        standalone QgsGeometry / QDateTime value objects. Doing this work off the main
+        thread leaves apply_snapshot() with almost nothing to do.
 
-        :param pilots: List of live VATSIM pilots
-        :param hidden_vatsim_id: CID of the QGIS user's own aircraft to leave out (useful when
-            another plugin/source is already displaying it).
+        :param hidden_vatsim_id: CID of the QGIS user's own aircraft to leave out (useful
+            when another plugin/source is already displaying it).
+        :return: {callsign: (geometry, dynamic_attrs, flightplan_sig, flightplan_attrs, all_values)}
+        """
+        cls = VatsimAircraftLayer
+        idx = cls.FIELD_IDX
+        timestamp = QDateTime.currentDateTime()
+        prepared = {}
+        for p in pilots:
+            if p.cid == hidden_vatsim_id:
+                continue
+            values = dict(
+                callsign=p.callsign, cid=p.cid, name=p.name,
+                latitude=p.latitude, longitude=p.longitude, altitude=p.altitude,
+                heading=p.heading, groundspeed=p.groundspeed,
+                transponder=p.transponder, server=p.server,
+                departure=p.departure, arrival=p.arrival, aircraft=p.aircraft,
+                cruise=p.cruise, route=p.route, timestamp=timestamp,
+            )
+            prepared[p.callsign] = (
+                QgsGeometry(QgsPoint(p.longitude, p.latitude, p.altitude)),
+                {idx[n]: values[n] for n in cls.DYNAMIC_FIELDS},
+                tuple(values[n] for n in cls.FLIGHTPLAN_FIELDS),
+                {idx[n]: values[n] for n in cls.FLIGHTPLAN_FIELDS},
+                [values[n] for n in cls.FIELD_NAMES],
+            )
+        return prepared
+
+    def apply_snapshot(self, prepared: dict) -> bool:
+        """
+        Sync the layer with a snapshot from prepare_snapshot(). MAIN THREAD ONLY.
+
+        Every provider operation is a single batched call and the layer is repainted
+        once at the end.
         """
         try:
-            timestamp = QDateTime.currentDateTime()
-            current = {p.callsign: p for p in pilots if p.cid != hidden_vatsim_id}
-
             # 1. Remove pilots that have disconnected
-            gone = self.fid_by_callsign.keys() - current.keys()
+            gone = self.fid_by_callsign.keys() - prepared.keys()
             if gone:
                 self.pr.deleteFeatures([self.fid_by_callsign.pop(cs) for cs in gone])
+                for cs in gone:
+                    self._fp_sig.pop(cs, None)
 
-            # 2. Update pilots that are already in the layer (two batched calls)
+            # 2. Update pilots already in the layer (two batched calls)
             geom_changes = {}
             attr_changes = {}
+            fp_sig_store = self._fp_sig
             for callsign, fid in self.fid_by_callsign.items():
-                pilot = current[callsign]
-                geom_changes[fid] = self._geometry(pilot)
-                attr_changes[fid] = {
-                    self.field_idx[name]: value
-                    for name, value in self._values(pilot, timestamp).items()
-                }
+                geom, dynamic, fp_sig, fp_attrs, _ = prepared[callsign]
+                geom_changes[fid] = geom
+                if fp_sig != fp_sig_store.get(callsign):
+                    fp_sig_store[callsign] = fp_sig
+                    attr_changes[fid] = {**dynamic, **fp_attrs}
+                else:
+                    attr_changes[fid] = dynamic
             if geom_changes:
                 self.pr.changeGeometryValues(geom_changes)
                 self.pr.changeAttributeValues(attr_changes)
 
             # 3. Add new pilots (one batched call)
-            new_pilots = [p for cs, p in current.items() if cs not in self.fid_by_callsign]
+            new_callsigns = [cs for cs in prepared if cs not in self.fid_by_callsign]
             features = []
-            for pilot in new_pilots:
+            for callsign in new_callsigns:
+                geom, _, _, _, all_values = prepared[callsign]
                 feature = QgsFeature(self.layer.fields())
-                feature.setGeometry(self._geometry(pilot))
-                values = self._values(pilot, timestamp)
-                feature.setAttributes([values[name] for name in self.field_names])
+                feature.setGeometry(geom)
+                feature.setAttributes(all_values)
                 features.append(feature)
 
             if features:
                 _, added = self.pr.addFeatures(features)
-                for pilot, feature in zip(new_pilots, added):
-                    self.fid_by_callsign[pilot.callsign] = feature.id()
+                for callsign, feature in zip(new_callsigns, added):
+                    self.fid_by_callsign[callsign] = feature.id()
+                    fp_sig_store[callsign] = prepared[callsign][2]
 
             print(f"VATSIM Pilot Refresh: Updated: {len(geom_changes)}; "
                   f"New: {len(features)}; Deleted: {len(gone)}")
@@ -208,6 +233,7 @@ class VatsimAircraftLayer:
 
         except Exception as e:
             print(f"Error during refresh: {e}")
+            QgsMessageLog.logMessage(f"Error during refresh: {e}", level=Qgis.MessageLevel.Critical)
             return False
 
     def rename_layer(self, name: str):

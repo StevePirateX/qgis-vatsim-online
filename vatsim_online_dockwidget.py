@@ -23,11 +23,13 @@
 """
 
 import os
+import time
 from pathlib import Path
 
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis.core import QgsMessageLog, Qgis, QgsSettings, QgsProject
+from qgis.utils import iface
 from dotenv import load_dotenv
 
 from .history_layer import HistoryLayer, HistoryWriter
@@ -67,6 +69,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.history_layer = None
         self.update_thread = None
         self.is_updating = False
+        self._pending = None  # newest snapshot waiting for the canvas to finish drawing
         self.hide_vatsim_id = False
 
         self.settings = QgsSettings()
@@ -118,12 +121,15 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.vatsim_data,
             self.refresh_rate,
             history_writer,
+            self.hidden_vatsim_id,
             self.debug
         )
 
         # Connect signals (queued automatically, so the slots run on the main thread)
         self.update_thread.data_ready.connect(self._apply_data)
         self.update_thread.log_message.connect(self._log_message)
+        # If a snapshot arrives while the canvas is drawing, it is applied once the draw ends
+        iface.mapCanvas().mapCanvasRefreshed.connect(self._flush_pending)
 
         # Start thread
         self.update_thread.start()
@@ -135,6 +141,12 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.update_thread.stop()   # waits for the worker (and any history write) to finish
             self.update_thread = None
 
+        try:
+            iface.mapCanvas().mapCanvasRefreshed.disconnect(self._flush_pending)
+        except (TypeError, RuntimeError):
+            pass  # was not connected
+        self._pending = None
+
         # The worker wrote history through its own connection; refresh only if it's on screen
         if self.history_layer is not None:
             self.history_layer.refresh_if_visible()
@@ -144,13 +156,30 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.update_ui_state()
         self._log_message("Updates stopped", Qgis.MessageLevel.Info)
 
-    def _apply_data(self, pilots):
-        """Apply a fresh VATSIM snapshot to the live layer. Runs on the main thread."""
+    def _apply_data(self, prepared):
+        """Receive a prepared snapshot from the worker. Runs on the main thread."""
         if not self.is_updating or self.vatsim_layer is None:
             return  # a queued update can arrive just after Stop was pressed
-        result = self.vatsim_layer.apply_snapshot(pilots, self.hidden_vatsim_id)
-        if result and self.debug:
-            self._log_message("Update complete", Qgis.MessageLevel.Success)
+        self._pending = prepared  # only ever keep the newest snapshot
+        if iface.mapCanvas().isDrawing():
+            return  # _flush_pending applies it as soon as the canvas finishes drawing
+        self._flush_pending()
+
+    def _flush_pending(self):
+        """Apply the waiting snapshot to the live layer (main thread)."""
+        if self._pending is None:
+            return
+        if not self.is_updating or self.vatsim_layer is None:
+            self._pending = None
+            return
+        prepared, self._pending = self._pending, None
+        start = time.perf_counter()
+        ok = self.vatsim_layer.apply_snapshot(prepared)
+        if self.debug:
+            elapsed_ms = 1000 * (time.perf_counter() - start)
+            self._log_message(
+                f"apply_snapshot (main thread): {elapsed_ms:.0f} ms for {len(prepared)} pilots; "
+                f"ok={ok}; layer now has {self.vatsim_layer.layer.featureCount()} features")
 
     @staticmethod
     def _log_message(message, level=Qgis.MessageLevel.Info):
