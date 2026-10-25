@@ -1,4 +1,5 @@
 import os
+import time
 from typing import List
 
 from osgeo import ogr, gdal
@@ -28,6 +29,10 @@ HISTORY_MIN_SCALE = 10_000_000
 # Pilots slower than this (knots) are not recorded, so aircraft parked at airports don't
 # add thousands of identical stacked points every cycle. Set to 0 to record everything.
 MIN_RECORD_GROUNDSPEED = 30
+
+# Write-ahead logging lets QGIS read the file while the worker writes. If history writes are
+# slow, try False to see whether journal mode is involved.
+USE_WAL = True
 
 FIELDS = [
     QgsField("callsign", QMetaType.Type.QString, len=9),
@@ -207,11 +212,13 @@ class HistoryWriter:
         self.ds = None
         self.layer = None
         self.idx = {}
+        self.last_timing = None  # (begin, insert loop, commit) in seconds, for debug logging
 
     def open(self):
         # WAL lets QGIS read the file while we write. Thread-local, so it doesn't change
         # anything for the rest of QGIS.
-        gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
+        if USE_WAL:
+            gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
         self.ds = ogr.Open(self.gpkg_path, update=1)
         if self.ds is None:
             raise RuntimeError(f"Could not open GeoPackage for writing: {self.gpkg_path}")
@@ -231,7 +238,9 @@ class HistoryWriter:
         idx = self.idx
         written = 0
 
+        t0 = time.perf_counter()
         self.layer.StartTransaction()
+        t1 = time.perf_counter()
         try:
             for p in pilots:
                 if p.groundspeed < self.min_groundspeed:
@@ -250,7 +259,9 @@ class HistoryWriter:
                 feature.SetField(idx["timestamp"], timestamp)
                 self.layer.CreateFeature(feature)
                 written += 1
+            t2 = time.perf_counter()
             self.layer.CommitTransaction()
+            self.last_timing = (t1 - t0, t2 - t1, time.perf_counter() - t2)
         except Exception:
             self.layer.RollbackTransaction()
             raise
@@ -259,4 +270,5 @@ class HistoryWriter:
     def close(self):
         self.layer = None
         self.ds = None  # closing the dataset flushes everything to disk
-        gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", None)
+        if USE_WAL:
+            gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", None)
