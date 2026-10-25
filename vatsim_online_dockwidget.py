@@ -27,9 +27,8 @@ import time
 from pathlib import Path
 
 from qgis.PyQt import QtWidgets, uic
-from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtCore import pyqtSignal, QTimer
 from qgis.core import QgsMessageLog, Qgis, QgsSettings, QgsProject
-from qgis.utils import iface
 from dotenv import load_dotenv
 
 from .history_layer import HistoryLayer, HistoryWriter
@@ -69,7 +68,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.history_layer = None
         self.update_thread = None
         self.is_updating = False
-        self._pending = None  # newest snapshot waiting for the canvas to finish drawing
+        self._heartbeat = None  # debug-only timer that detects UI stalls
+        self._last_beat = None
         self.hide_vatsim_id = False
 
         self.settings = QgsSettings()
@@ -128,8 +128,14 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # Connect signals (queued automatically, so the slots run on the main thread)
         self.update_thread.data_ready.connect(self._apply_data)
         self.update_thread.log_message.connect(self._log_message)
-        # If a snapshot arrives while the canvas is drawing, it is applied once the draw ends
-        iface.mapCanvas().mapCanvasRefreshed.connect(self._flush_pending)
+
+        if self.debug:
+            # Logs a warning whenever the main thread was blocked for more than half a second
+            self._last_beat = None
+            self._heartbeat = QTimer(self)
+            self._heartbeat.setInterval(100)
+            self._heartbeat.timeout.connect(self._on_heartbeat)
+            self._heartbeat.start()
 
         # Start thread
         self.update_thread.start()
@@ -141,11 +147,9 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.update_thread.stop()   # waits for the worker (and any history write) to finish
             self.update_thread = None
 
-        try:
-            iface.mapCanvas().mapCanvasRefreshed.disconnect(self._flush_pending)
-        except (TypeError, RuntimeError):
-            pass  # was not connected
-        self._pending = None
+        if self._heartbeat is not None:
+            self._heartbeat.stop()
+            self._heartbeat = None
 
         # The worker wrote history through its own connection; refresh only if it's on screen
         if self.history_layer is not None:
@@ -157,22 +161,9 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self._log_message("Updates stopped", Qgis.MessageLevel.Info)
 
     def _apply_data(self, prepared):
-        """Receive a prepared snapshot from the worker. Runs on the main thread."""
+        """Apply a prepared snapshot to the live layer. Runs on the main thread."""
         if not self.is_updating or self.vatsim_layer is None:
             return  # a queued update can arrive just after Stop was pressed
-        self._pending = prepared  # only ever keep the newest snapshot
-        if iface.mapCanvas().isDrawing():
-            return  # _flush_pending applies it as soon as the canvas finishes drawing
-        self._flush_pending()
-
-    def _flush_pending(self):
-        """Apply the waiting snapshot to the live layer (main thread)."""
-        if self._pending is None:
-            return
-        if not self.is_updating or self.vatsim_layer is None:
-            self._pending = None
-            return
-        prepared, self._pending = self._pending, None
         start = time.perf_counter()
         ok = self.vatsim_layer.apply_snapshot(prepared)
         if self.debug:
@@ -180,6 +171,14 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self._log_message(
                 f"apply_snapshot (main thread): {elapsed_ms:.0f} ms for {len(prepared)} pilots; "
                 f"ok={ok}; layer now has {self.vatsim_layer.layer.featureCount()} features")
+
+    def _on_heartbeat(self):
+        now = time.perf_counter()
+        if self._last_beat is not None:
+            gap_ms = 1000 * (now - self._last_beat)
+            if gap_ms > 500:
+                self._log_message(f"UI stalled for {gap_ms:.0f} ms", Qgis.MessageLevel.Warning)
+        self._last_beat = now
 
     @staticmethod
     def _log_message(message, level=Qgis.MessageLevel.Info):
@@ -214,5 +213,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if self.history_be_recorded() and self.is_updating:
             self.history_layer = HistoryLayer(gpkg_path=self.mHistoryFile.filePath())
+            # Never draw the history layer while recording: a slow render gets restarted by every
+            # live update and can then never finish.
+            self.history_layer.set_visible(False)
         else:
             self.history_layer = None

@@ -51,6 +51,8 @@ class VatsimUpdateThread(QThread):
 
                         written = 0
                         if self.history_writer:
+                            if self.debug:
+                                self._log("worker: history write started")
                             written = self.history_writer.write(pilots, self.vatsim_data.get_update_time())
                         t_done = time.perf_counter()
 
