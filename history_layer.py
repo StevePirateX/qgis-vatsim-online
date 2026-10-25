@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 from typing import List
 
 from osgeo import ogr, gdal
@@ -34,6 +35,11 @@ MIN_RECORD_GROUNDSPEED = 30
 # slow, try False to see whether journal mode is involved.
 USE_WAL = True
 
+# When no GeoPackage path is chosen, start a new file each day (vatsim-history-YYYY-MM-DD.gpkg)
+# instead of appending to one ever-growing file. Huge history tables make both writing and
+# rendering slow.
+ROTATE_DAILY = True
+
 FIELDS = [
     QgsField("callsign", QMetaType.Type.QString, len=9),
     QgsField("cid", QMetaType.Type.Int),
@@ -65,7 +71,8 @@ class HistoryLayer:
         """
         if not gpkg_path or not gpkg_path.endswith('.gpkg'):
             project_path = QgsProject.instance().homePath()
-            gpkg_path = os.path.join(project_path, 'vatsim-history.gpkg')
+            file_name = f"vatsim-history-{datetime.now():%Y-%m-%d}.gpkg" if ROTATE_DAILY else "vatsim-history.gpkg"
+            gpkg_path = os.path.join(project_path, file_name)
             QgsMessageLog.logMessage(f"No geopackage path specified. Using default path: {gpkg_path}",
                                      level=Qgis.MessageLevel.Info)
 
@@ -169,6 +176,12 @@ class HistoryLayer:
     def remove_layer(self):
         """Remove the layer from QGIS."""
         QgsProject.instance().removeMapLayer(self.layer.id())
+
+    def set_visible(self, visible: bool):
+        """Show or hide the layer in the layer tree."""
+        tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
+        if tree_layer:
+            tree_layer.setItemVisibilityChecked(visible)
 
     def refresh_if_visible(self):
         """Re-read the table after recording, but only pay for it if the layer is on screen.
