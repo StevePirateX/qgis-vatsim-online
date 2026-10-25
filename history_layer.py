@@ -35,6 +35,12 @@ MIN_RECORD_GROUNDSPEED = 1
 # slow, try False to see whether journal mode is involved.
 USE_WAL = True
 
+# SQLite "synchronous" level for history writes. With WAL, NORMAL stops every commit waiting for
+# the disk to confirm the write (the file cannot be corrupted by a QGIS crash; only the last few
+# seconds could be lost if the whole machine lost power). SQLite's default is FULL, which is
+# slower. Set to None to leave SQLite's default.
+SQLITE_SYNCHRONOUS = "NORMAL"
+
 # When no GeoPackage path is chosen, start a new file each day (vatsim-history-YYYY-MM-DD.gpkg)
 # instead of appending to one ever-growing file. Huge history tables make both writing and
 # rendering slow.
@@ -232,6 +238,8 @@ class HistoryWriter:
         # anything for the rest of QGIS.
         if USE_WAL:
             gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
+            if SQLITE_SYNCHRONOUS:
+                gdal.SetThreadLocalConfigOption("OGR_SQLITE_SYNCHRONOUS", SQLITE_SYNCHRONOUS)
         self.ds = ogr.Open(self.gpkg_path, update=1)
         if self.ds is None:
             raise RuntimeError(f"Could not open GeoPackage for writing: {self.gpkg_path}")
@@ -285,3 +293,4 @@ class HistoryWriter:
         self.ds = None  # closing the dataset flushes everything to disk
         if USE_WAL:
             gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", None)
+            gdal.SetThreadLocalConfigOption("OGR_SQLITE_SYNCHRONOUS", None)
