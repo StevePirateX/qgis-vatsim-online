@@ -19,6 +19,7 @@ from qgis.core import (
 )
 
 from .pilot import Pilot
+from .history_table import open_history_layer
 from .stationary_filter import (StationaryFilter, STATIONARY_MAX_GROUNDSPEED,
                                 STATIONARY_MOVE_TOLERANCE_M)
 from .history_recorder_client import RecorderProcessClient, RecorderUnavailable
@@ -62,26 +63,25 @@ FIELDS = [
 
 
 class HistoryLayer:
-    """The QGIS-side view of the history table. MAIN THREAD ONLY.
+    """Where the history lives, and how to look at it. MAIN THREAD ONLY.
 
-    Writing is done by HistoryWriter (below), which uses its own OGR connection
-    inside the worker thread and never touches this layer.
+    While recording, the history GeoPackage is deliberately NOT loaded into QGIS: a layer that
+    QGIS has open on the file being written can make the whole window wait whenever the recorder
+    commits. Recording is done by HistoryWriter, which creates the GeoPackage and table itself.
+    Call load_into_project() to look at the history once recording has stopped.
     """
 
     def __init__(self, gpkg_path: str = None, table_name=TABLE_NAME, pretty_name: str = PRETTY_NAME,
                  crs="EPSG:4326", svg_name: str = "aircraft.svg"):
         """
-        Initialise the history layer
-
-        :param gpkg_path: File path of the geopackage
+        :param gpkg_path: File path of the geopackage (a dated default is used if empty)
         :param table_name: Table in the GeoPackage
-        :param pretty_name: Layer name that will be displayed in the layer panel
-        :param crs: CRS of the layer
+        :param pretty_name: Layer name used when the history is loaded into the project
         """
         if not gpkg_path or not gpkg_path.endswith('.gpkg'):
-            project_path = QgsProject.instance().homePath()
+            folder = QgsProject.instance().homePath() or os.path.expanduser("~")
             file_name = f"vatsim-history-{datetime.now():%Y-%m-%d}.gpkg" if ROTATE_DAILY else "vatsim-history.gpkg"
-            gpkg_path = os.path.join(project_path, file_name)
+            gpkg_path = os.path.join(folder, file_name)
             QgsMessageLog.logMessage(f"No geopackage path specified. Using default path: {gpkg_path}",
                                      level=Qgis.MessageLevel.Info)
 
@@ -90,29 +90,9 @@ class HistoryLayer:
         self.pretty_name = pretty_name
         self.crs = crs
 
-        plugin_dir = os.path.dirname(__file__)
-        self.svg_path = os.path.join(plugin_dir, svg_name)
-
-        # Ensure .gpkg extension
-        if not self.gpkg_path.lower().endswith('.gpkg'):
-            self.gpkg_path += '.gpkg'
-
-        # First check if layer already exists in project
-        existing_layer = HistoryLayer.find_existing_layer(path=self.gpkg_path)
-
-        if existing_layer:
-            self.layer = existing_layer
-            print(f"Using existing layer: {self.layer.name()}")
-        else:
-            self.layer = self._load_or_create_layer(crs)
-            QgsProject.instance().addMapLayer(self.layer)
-            self._apply_default_style()
-
-        self.pr = self.layer.dataProvider()
-
     @staticmethod
     def find_existing_layer(path: str = "", project: QgsProject = None) -> QgsVectorLayer | None:
-        """Check if layer already exists in project."""
+        """Check if a history layer is already loaded in the project."""
         project = project or QgsProject.instance()
         for layer in project.mapLayers().values():
             if (isinstance(layer, QgsVectorLayer) and
@@ -121,39 +101,32 @@ class HistoryLayer:
                 return layer
         return None
 
-    def _load_or_create_layer(self, crs: str) -> QgsVectorLayer:
-        """Load from GeoPackage or create new layer if needed."""
-        uri = f"{self.gpkg_path}|layername={self.table_name}"
-        layer = QgsVectorLayer(uri, self.pretty_name, "ogr")
+    def unload_from_project(self) -> int:
+        """Remove any layers loaded from this GeoPackage, so QGIS holds no connection to it.
+        Returns how many layers were removed."""
+        project = QgsProject.instance()
+        target = os.path.normcase(os.path.abspath(self.gpkg_path))
+        layer_ids = []
+        for layer in project.mapLayers().values():
+            if isinstance(layer, QgsVectorLayer) and layer.providerType() == "ogr":
+                source = layer.source().partition('|')[0]
+                if os.path.normcase(os.path.abspath(source)) == target:
+                    layer_ids.append(layer.id())
+        if layer_ids:
+            project.removeMapLayers(layer_ids)
+        return len(layer_ids)
 
+    def load_into_project(self) -> QgsVectorLayer | None:
+        """Add the history table to the project so it can be viewed. Do this when NOT recording."""
+        layer = QgsVectorLayer(f"{self.gpkg_path}|layername={self.table_name}", self.pretty_name, "ogr")
         if not layer.isValid():
-            layer = self._create_layer_in_geopackage(crs)
-
+            return None
+        QgsProject.instance().addMapLayer(layer)
+        self._apply_default_style(layer)
         return layer
 
-    def _create_layer_in_geopackage(self, crs: str) -> QgsVectorLayer:
-        """Create a new PointZ table in the GeoPackage."""
-        temp_layer = QgsVectorLayer(f"PointZ?crs={crs}", "temp", "memory")
-        temp_layer.dataProvider().addAttributes(FIELDS)
-        temp_layer.updateFields()
-
-        options = QgsVectorFileWriter.SaveVectorOptions()
-        options.driverName = "GPKG"
-        options.layerName = self.table_name
-
-        error = QgsVectorFileWriter.writeAsVectorFormatV3(
-            layer=temp_layer,
-            fileName=self.gpkg_path,
-            transformContext=QgsProject.instance().transformContext(),
-            options=options
-        )
-
-        if error[0] != QgsVectorFileWriter.NoError:
-            raise RuntimeError(f"Failed to create GeoPackage layer: {error[1]}")
-
-        return QgsVectorLayer(f"{self.gpkg_path}|layername={self.table_name}", self.pretty_name, "ogr")
-
-    def _apply_default_style(self, aircraft_colour: QColor = QColor(0, 255, 255)):
+    @staticmethod
+    def _apply_default_style(layer: QgsVectorLayer, aircraft_colour: QColor = QColor(0, 255, 255)):
         """A deliberately cheap style: small flat circles, no font glyph, no rotation, no labels.
 
         The history layer can hold hundreds of thousands of points, so anything expensive per
@@ -167,49 +140,14 @@ class HistoryLayer:
             'color': colour.name(QColor.NameFormat.HexArgb),
             'outline_style': 'no',
         })
-        self.layer.setRenderer(QgsSingleSymbolRenderer(symbol))
-        self.layer.setLabelsEnabled(False)
+        layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+        layer.setLabelsEnabled(False)
 
         # Only draw when zoomed in enough for the points to be useful
         if HISTORY_MIN_SCALE:
-            self.layer.setScaleBasedVisibility(True)
-            self.layer.setMinimumScale(HISTORY_MIN_SCALE)
-
-        # Hidden by default
-        tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
-        if tree_layer:
-            tree_layer.setItemVisibilityChecked(False)
-
-        self.layer.triggerRepaint()
-
-    def remove_layer(self):
-        """Remove the layer from QGIS."""
-        QgsProject.instance().removeMapLayer(self.layer.id())
-
-    def set_visible(self, visible: bool):
-        """Show or hide the layer in the layer tree."""
-        tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
-        if tree_layer:
-            tree_layer.setItemVisibilityChecked(visible)
-
-    def refresh_if_visible(self):
-        """Re-read the table after recording, but only pay for it if the layer is on screen.
-
-        If the layer is hidden when you stop, QGIS will pick up the new rows when you turn it
-        on (use Layer > Refresh, or F5, if it ever looks stale).
-        """
-        tree_layer = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
-        if tree_layer and tree_layer.isVisible():
-            self.layer.dataProvider().reloadData()
-            self.layer.triggerRepaint()
-
-    def create_spatial_index(self):
-        """Create a spatial index only if one is missing (GeoPackages normally already have one)."""
-        provider = self.layer.dataProvider()
-        presence = provider.hasSpatialIndex()
-        # Enum names differ between QGIS versions ("SpatialIndexNotPresent" / "NotPresent")
-        if 'NotPresent' in getattr(presence, 'name', str(presence)):
-            provider.createSpatialIndex()
+            layer.setScaleBasedVisibility(True)
+            layer.setMinimumScale(HISTORY_MIN_SCALE)
+        layer.triggerRepaint()
 
 
 class InProcessHistoryWriter:
@@ -251,12 +189,7 @@ class InProcessHistoryWriter:
             gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
             if SQLITE_SYNCHRONOUS:
                 gdal.SetThreadLocalConfigOption("OGR_SQLITE_SYNCHRONOUS", SQLITE_SYNCHRONOUS)
-        self.ds = ogr.Open(self.gpkg_path, update=1)
-        if self.ds is None:
-            raise RuntimeError(f"Could not open GeoPackage for writing: {self.gpkg_path}")
-        self.layer = self.ds.GetLayerByName(self.table_name)
-        if self.layer is None:
-            raise RuntimeError(f"Table '{self.table_name}' not found in {self.gpkg_path}")
+        self.ds, self.layer = open_history_layer(self.gpkg_path, self.table_name)
         defn = self.layer.GetLayerDefn()
         self.idx = {defn.GetFieldDefn(i).GetName(): i for i in range(defn.GetFieldCount())}
 

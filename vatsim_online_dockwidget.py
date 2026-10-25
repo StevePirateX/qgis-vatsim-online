@@ -151,9 +151,11 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self._heartbeat.stop()
             self._heartbeat = None
 
-        # The worker wrote history through its own connection; refresh only if it's on screen
         if self.history_layer is not None:
-            self.history_layer.refresh_if_visible()
+            self._log_message(
+                f"History is saved in {self.history_layer.gpkg_path}. It is not loaded into QGIS "
+                f"while recording; add it with Layer > Add Layer when you want to view it.",
+                Qgis.MessageLevel.Info)
 
         # Reset UI
         self.is_updating = False
@@ -206,15 +208,16 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         if not self.is_updating:
             if self.vatsim_layer is not None:
                 self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
-            if self.history_layer is not None and self.history_be_recorded():
-                self.history_layer.create_spatial_index()
 
         self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
 
         if self.history_be_recorded() and self.is_updating:
             self.history_layer = HistoryLayer(gpkg_path=self.mHistoryFile.filePath())
-            # Never draw the history layer while recording: a slow render gets restarted by every
-            # live update and can then never finish.
-            self.history_layer.set_visible(False)
+            # QGIS must not hold the file the recorder is writing, or the window can stall
+            removed = self.history_layer.unload_from_project()
+            if removed:
+                self._log_message(
+                    f"Removed {removed} history layer(s) from the project so QGIS isn't holding "
+                    f"the file being recorded to", Qgis.MessageLevel.Info)
         else:
             self.history_layer = None

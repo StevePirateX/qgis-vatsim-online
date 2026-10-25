@@ -21,6 +21,7 @@ from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from stationary_filter import StationaryFilter  # noqa: E402
+from history_table import open_history_layer  # noqa: E402
 from osgeo import ogr, gdal  # noqa: E402
 
 Pilot = namedtuple("Pilot", "callsign cid latitude longitude altitude heading groundspeed "
@@ -88,12 +89,8 @@ def main() -> int:
             gdal.SetConfigOption("OGR_SQLITE_SYNCHRONOUS", args.sync)
 
     try:
-        ds = ogr.Open(args.gpkg, update=1)
-        if ds is None:
-            raise RuntimeError("could not open the file for writing")
-        layer = ds.GetLayerByName(args.table)
-        if layer is None:
-            raise RuntimeError(f"table '{args.table}' not found")
+        # creates the GeoPackage and table if they don't exist, so QGIS never has to touch the file
+        ds, layer = open_history_layer(args.gpkg, args.table)
     except Exception as e:
         reply(type="error", message=f"history recorder could not open {args.gpkg}: {e}")
         return 2
