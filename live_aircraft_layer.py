@@ -1,6 +1,6 @@
 import os
 
-from qgis.PyQt.QtCore import QMetaType, QDateTime
+from qgis.PyQt.QtCore import QMetaType, QDateTime, QPointF
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis.core import (
     QgsVectorLayer,
@@ -21,6 +21,7 @@ from qgis.core import (
     QgsVectorLayerSimpleLabeling,
     QgsMessageLog,
     Qgis,
+    QgsUnitTypes
 )
 
 # IMPORTANT: the aircraft glyph is a private-use character from the Bravura font and
@@ -91,10 +92,12 @@ class VatsimAircraftLayer:
             font_layer = QgsFontMarkerSymbolLayer()
             font_layer.setCharacter(AIRCRAFT_GLYPH)
             font_layer.setFontFamily("Bravura Text")
-            font_layer.setSize(8)
+            font_layer.setSize(6)
             font_layer.setColor(aircraft_colour)
             font_layer.setStrokeColor(QColor('black'))
             font_layer.setStrokeWidth(0.2)
+            font_layer.setOffset(QPointF(-0.6, -1.0))
+            font_layer.setOffsetUnit(QgsUnitTypes.RenderMillimeters)
             symbol.changeSymbolLayer(0, font_layer)
             rotation_property = QgsProperty.fromExpression("heading - 45")
             symbol.symbolLayer(0).setDataDefinedProperty(
