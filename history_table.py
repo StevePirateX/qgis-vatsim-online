@@ -37,7 +37,7 @@ def open_history_layer(gpkg_path: str, table_name: str):
         srs.ImportFromEPSG(4326)
         if hasattr(osr, "OAMS_TRADITIONAL_GIS_ORDER"):
             srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)  # x = longitude
-        layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D)
+        layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D, options=["SPATIAL_INDEX=NO"])
         if layer is None:
             raise RuntimeError(f"could not create the table '{table_name}'")
         for name, ogr_type, width in FIELDS:

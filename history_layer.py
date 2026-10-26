@@ -187,8 +187,8 @@ class InProcessHistoryWriter:
         # anything for the rest of QGIS.
         if USE_WAL:
             gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
-            if SQLITE_SYNCHRONOUS:
-                gdal.SetThreadLocalConfigOption("OGR_SQLITE_SYNCHRONOUS", SQLITE_SYNCHRONOUS)
+        if SQLITE_SYNCHRONOUS:
+            gdal.SetThreadLocalConfigOption("OGR_SQLITE_PRAGMA", f"synchronous={SQLITE_SYNCHRONOUS}")
         self.ds, self.layer = open_history_layer(self.gpkg_path, self.table_name)
         defn = self.layer.GetLayerDefn()
         self.idx = {defn.GetFieldDefn(i).GetName(): i for i in range(defn.GetFieldCount())}

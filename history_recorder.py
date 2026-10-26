@@ -84,9 +84,9 @@ def main() -> int:
 
     gdal.UseExceptions()
     if args.wal == "1":
-        gdal.SetConfigOption("OGR_SQLITE_JOURNAL", "WAL")  # QGIS can keep reading while we write
-        if args.sync:
-            gdal.SetConfigOption("OGR_SQLITE_SYNCHRONOUS", args.sync)
+        gdal.SetConfigOption("OGR_SQLITE_JOURNAL", "WAL")
+    if args.sync:
+        gdal.SetConfigOption("OGR_SQLITE_PRAGMA", f"synchronous={args.sync}")
 
     try:
         # creates the GeoPackage and table if they don't exist, so QGIS never has to touch the file
