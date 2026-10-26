@@ -32,7 +32,7 @@ from qgis.core import QgsMessageLog, Qgis, QgsSettings, QgsProject
 from dotenv import load_dotenv
 
 from .history_layer import HistoryLayer, HistoryWriter
-from .live_aircraft_layer import VatsimAircraftLayer
+from .live_aircraft_layer import VatsimAircraftLayer, LayerUnusable
 from .vatsim_data import VatsimData
 from .update_data_thread import VatsimUpdateThread
 
@@ -106,7 +106,16 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """Start the auto-update thread."""
         self.fetch_settings()
 
-        # Setup UI (this also creates the live layer and, if enabled, the history layer)
+        # Use the project's "VATSIM Data" point layer, or create it. Its symbology is left alone.
+        try:
+            self.vatsim_layer = VatsimAircraftLayer.acquire(self.mColorButton.color())
+        except LayerUnusable as e:
+            self.vatsim_layer = None
+            self._log_message(f"Can't start updates: {e}", Qgis.MessageLevel.Warning)
+            return
+        self._log_message(self.vatsim_layer.describe(), Qgis.MessageLevel.Info)
+
+        # Setup UI (this also prepares the history file if recording is enabled)
         self.is_updating = True
         self.update_ui_state()
 
@@ -122,7 +131,9 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.refresh_rate,
             history_writer,
             self.hidden_vatsim_id,
-            self.debug
+            self.debug,
+            self.vatsim_layer.field_idx,
+            self.vatsim_layer.field_count
         )
 
         # Connect signals (queued automatically, so the slots run on the main thread)
@@ -157,8 +168,9 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 f"while recording; add it with Layer > Add Layer when you want to view it.",
                 Qgis.MessageLevel.Info)
 
-        # Reset UI
+        # Reset UI. The "VATSIM Data" layer stays in the project, showing the last data received.
         self.is_updating = False
+        self.vatsim_layer = None
         self.update_ui_state()
         self._log_message("Updates stopped", Qgis.MessageLevel.Info)
 
@@ -166,6 +178,11 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """Apply a prepared snapshot to the live layer. Runs on the main thread."""
         if not self.is_updating or self.vatsim_layer is None:
             return  # a queued update can arrive just after Stop was pressed
+        if not self.vatsim_layer.is_alive():
+            self._log_message("The VATSIM Data layer was removed from the project; stopping updates",
+                              Qgis.MessageLevel.Warning)
+            self._stop_updating()
+            return
         start = time.perf_counter()
         ok = self.vatsim_layer.apply_snapshot(prepared)
         if self.debug:
@@ -204,12 +221,6 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnGetData.setText(button_text)
         button_style = "background-color: #4CAF50; color: white;" if self.is_updating else ""
         self.btnGetData.setStyleSheet(button_style)
-
-        if not self.is_updating:
-            if self.vatsim_layer is not None:
-                self.vatsim_layer.rename_layer("VATSIM Data Snapshot")
-
-        self.vatsim_layer = VatsimAircraftLayer(aircraft_colour=self.mColorButton.color(), layer_name="VATSIM Data") if self.is_updating else None
 
         if self.history_be_recorded() and self.is_updating:
             self.history_layer = HistoryLayer(gpkg_path=self.mHistoryFile.filePath())

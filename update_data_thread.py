@@ -16,13 +16,16 @@ class VatsimUpdateThread(QThread):
     log_message = pyqtSignal(str, int)  # thread-safe logging (level sent as int)
 
     def __init__(self, vatsim_data, refresh_rate, history_writer=None, hidden_vatsim_id: int = 0,
-                 debug: bool = False):
+                 debug: bool = False, field_idx: dict = None, field_count: int = 0):
         super().__init__()
         self.vatsim_data = vatsim_data
         self.refresh_rate = refresh_rate
         self.history_writer = history_writer
         self.hidden_vatsim_id = hidden_vatsim_id
         self.debug = debug
+        # Where each VATSIM field lives in the target layer (plain data, no layer access)
+        self.field_idx = dict(field_idx or {})
+        self.field_count = field_count
         self._running = False
 
     def _log(self, message, level=Qgis.MessageLevel.Info):
@@ -50,7 +53,8 @@ class VatsimUpdateThread(QThread):
                         last_ts = ts
                         pilots = self.vatsim_data.pilots   # replaced, never mutated, per fetch
 
-                        prepared = VatsimAircraftLayer.prepare_snapshot(pilots, self.hidden_vatsim_id)
+                        prepared = VatsimAircraftLayer.prepare_snapshot(
+                            pilots, self.hidden_vatsim_id, self.field_idx, self.field_count)
                         t_prepare = time.perf_counter()
                         self.data_ready.emit(prepared)  # display first, history second
 
