@@ -33,8 +33,26 @@ def reply(**message):
     sys.stdout.flush()
 
 
-def write_snapshot(layer, defn, idx, flt, rows, timestamp):
-    """Insert one snapshot in a single transaction and return timing/count statistics."""
+def configure_sqlite(wal: bool, synchronous: str):
+    """GDAL settings for writing a GeoPackage that QGIS may be reading at the same time.
+
+    WAL lets readers carry on while we write; NORMAL stops every commit waiting for the disk
+    (safe against crashes of this program or QGIS; only the last moments could be lost if the
+    whole machine lost power).
+    """
+    if wal:
+        gdal.SetConfigOption("OGR_SQLITE_JOURNAL", "WAL")
+        if synchronous:
+            gdal.SetConfigOption("OGR_SQLITE_SYNCHRONOUS", synchronous)
+
+
+def write_snapshot(layer, defn, idx, flt, pilots, timestamp):
+    """Insert one snapshot in a single transaction and return timing/count statistics.
+
+    pilots: any objects with the attributes callsign, cid, latitude, longitude, altitude,
+    heading, groundspeed, departure, arrival, aircraft, cruise and route (the plugin's Pilot
+    class works, as does the Pilot tuple below).
+    """
     written = skipped = 0
     recorded = {}  # remembered by the filter only if the transaction commits
 
@@ -42,8 +60,7 @@ def write_snapshot(layer, defn, idx, flt, rows, timestamp):
     layer.StartTransaction()
     t1 = time.perf_counter()
     try:
-        for row in rows:
-            p = Pilot(*row)
+        for p in pilots:
             record, state = flt.check(p)
             if not record:
                 skipped += 1
@@ -67,7 +84,7 @@ def write_snapshot(layer, defn, idx, flt, rows, timestamp):
         raise
     t3 = time.perf_counter()
 
-    flt.commit(recorded, {row[0] for row in rows})
+    flt.commit(recorded, {p.callsign for p in pilots})
     return dict(written=written, skipped=skipped, begin=t1 - t0, insert=t2 - t1, commit=t3 - t2)
 
 
@@ -83,10 +100,7 @@ def main() -> int:
     args = parser.parse_args()
 
     gdal.UseExceptions()
-    if args.wal == "1":
-        gdal.SetConfigOption("OGR_SQLITE_JOURNAL", "WAL")
-    if args.sync:
-        gdal.SetConfigOption("OGR_SQLITE_PRAGMA", f"synchronous={args.sync}")
+    configure_sqlite(args.wal == "1", args.sync)
 
     try:
         # creates the GeoPackage and table if they don't exist, so QGIS never has to touch the file
@@ -121,7 +135,8 @@ def main() -> int:
             reply(type="stats", written=0, skipped=0, begin=0, insert=0, commit=0)
             continue
         try:
-            reply(type="stats", **write_snapshot(layer, defn, idx, flt, message["pilots"], message["ts"]))
+            pilots = [Pilot(*row) for row in message["pilots"]]
+            reply(type="stats", **write_snapshot(layer, defn, idx, flt, pilots, message["ts"]))
         except Exception as e:
             reply(type="error", message=f"history write failed: {e}")
 

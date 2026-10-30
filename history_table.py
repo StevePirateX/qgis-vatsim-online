@@ -25,6 +25,8 @@ def open_history_layer(gpkg_path: str, table_name: str):
 
     Returns (dataset, layer). Keep a reference to the dataset for as long as the layer is used.
     """
+    if os.path.exists(gpkg_path) and os.path.getsize(gpkg_path) == 0:
+        os.remove(gpkg_path)  # an empty file is left over from a failed create
     ds = ogr.Open(gpkg_path, update=1) if os.path.exists(gpkg_path) else None
     if ds is None:
         ds = ogr.GetDriverByName("GPKG").CreateDataSource(gpkg_path)
@@ -37,7 +39,7 @@ def open_history_layer(gpkg_path: str, table_name: str):
         srs.ImportFromEPSG(4326)
         if hasattr(osr, "OAMS_TRADITIONAL_GIS_ORDER"):
             srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)  # x = longitude
-        layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D, options=["SPATIAL_INDEX=NO"])
+        layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D)
         if layer is None:
             raise RuntimeError(f"could not create the table '{table_name}'")
         for name, ogr_type, width in FIELDS:
