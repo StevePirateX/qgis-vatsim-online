@@ -2,8 +2,8 @@
 
 It shares its code with the plugin, so the two always agree on:
   * the table layout and how the GeoPackage is created      (history_table.py)
-  * which aircraft are recorded - stationary ones only when
-    something about them changes                            (stationary_filter.py)
+  * which aircraft get a new row - a stationary aircraft gets one row, whose last_seen time
+    is pushed forward while nothing changes                 (stationary_filter.py)
   * how a snapshot is written                               (history_recorder.py)
 Only the loop, the settings and the VATSIM download live here.
 
@@ -98,11 +98,11 @@ def main():
                 print("no new VATSIM data yet. ", end="")   # the feed only changes about every 15 s
             else:
                 pilots = vatsim_data.pilots
-                stats = write_snapshot(layer, defn, idx, stationary_filter, pilots,
+                stats = write_snapshot(ds, layer, defn, idx, stationary_filter, pilots,
                                        vatsim_data.get_update_time())
                 last_update = vatsim_data.timestamp
                 print(f"Data {vatsim_data.timestamp:%H:%M:%S}  |  {len(pilots)} pilots  |  "
-                      f"wrote {stats['written']}, skipped {stats['skipped']} unchanged  |  "
+                      f"{stats['written']} new rows, {stats['extended']} unchanged extended  |  "
                       f"Runtime: {time.time() - cycle_start:.2f} secs. ", end="")
         except Exception as e:
             # Log the error and carry on - don't crash the loop. Reopen the file next cycle

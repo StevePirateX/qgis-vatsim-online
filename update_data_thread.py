@@ -68,14 +68,14 @@ class VatsimUpdateThread(QThread):
                         if self.debug:
                             history_ms = 1000 * (t_done - t_prepare)
                             if getattr(self.history_writer, "in_process", False):
-                                skipped = self.history_writer.last_skipped
+                                extended = self.history_writer.last_extended
                                 detail = ""
                                 timing = self.history_writer.last_timing
                                 if timing:
                                     detail = (f" [begin {1000 * timing[0]:.0f} / insert {1000 * timing[1]:.0f}"
                                               f" / commit {1000 * timing[2]:.0f} ms]")
                                 history_text = (f"history {history_ms:.0f} ms ({written} rows, "
-                                                f"{skipped} unchanged skipped){detail}")
+                                                f"{extended} unchanged extended){detail}")
                             else:
                                 # separate recorder process: the write itself is reported by the recorder
                                 history_text = f"history handoff {history_ms:.0f} ms"

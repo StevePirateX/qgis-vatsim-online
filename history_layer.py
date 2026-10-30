@@ -1,9 +1,8 @@
 import os
-import time
 from datetime import datetime
 from typing import List
 
-from osgeo import ogr, gdal
+from osgeo import gdal
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtGui import QColor
@@ -20,6 +19,7 @@ from qgis.core import (
 
 from .pilot import Pilot
 from .history_table import open_history_layer
+from .history_recorder import write_snapshot, configure_sqlite
 from .stationary_filter import (StationaryFilter, STATIONARY_MAX_GROUNDSPEED,
                                 STATIONARY_MOVE_TOLERANCE_M)
 from .history_recorder_client import RecorderProcessClient, RecorderUnavailable
@@ -151,10 +151,11 @@ class HistoryLayer:
 
 
 class InProcessHistoryWriter:
-    """Appends pilot positions to the history table using a plain OGR connection.
+    """Fallback: records history over a plain OGR connection inside the worker thread.
 
     open(), write() and close() must all be called from the SAME worker thread. It never
-    touches a QgsVectorLayer, so it cannot block or race with the QGIS main thread.
+    touches a QgsVectorLayer. The actual writing is history_recorder.write_snapshot, the same
+    code the separate recorder process uses.
     """
 
     in_process = True
@@ -167,79 +168,39 @@ class InProcessHistoryWriter:
                  move_tolerance_m: float = STATIONARY_MOVE_TOLERANCE_M, record_every_n: int = 1):
         """
         :param stationary_max_groundspeed: aircraft at or below this speed (knots) are stationary
-        :param move_tolerance_m: a stationary aircraft is only re-recorded if it moves this far
+        :param move_tolerance_m: a stationary aircraft starts a new row if it moves this far
         :param record_every_n: only record every Nth snapshot (1 = every update, 2 = every
             other update, and so on) to thin the history further
         """
         self.gpkg_path = gpkg_path
         self.table_name = table_name
         self.filter = StationaryFilter(stationary_max_groundspeed, move_tolerance_m)
-        self.last_skipped = 0  # unchanged stationary pilots skipped by the last write
+        self.last_extended = 0  # unchanged stationary records extended by the last write
         self.record_every_n = max(1, record_every_n)
         self._count = 0
         self.ds = None
         self.layer = None
+        self.defn = None
         self.idx = {}
         self.last_timing = None  # (begin, insert loop, commit) in seconds, for debug logging
 
     def open(self):
-        # WAL lets QGIS read the file while we write. Thread-local, so it doesn't change
-        # anything for the rest of QGIS.
-        if USE_WAL:
-            gdal.SetThreadLocalConfigOption("OGR_SQLITE_JOURNAL", "WAL")
-        if SQLITE_SYNCHRONOUS:
-            gdal.SetThreadLocalConfigOption("OGR_SQLITE_PRAGMA", f"synchronous={SQLITE_SYNCHRONOUS}")
+        # Thread-local, so it doesn't change anything for the rest of QGIS
+        configure_sqlite(USE_WAL, SQLITE_SYNCHRONOUS, thread_local=True)
         self.ds, self.layer = open_history_layer(self.gpkg_path, self.table_name)
-        defn = self.layer.GetLayerDefn()
-        self.idx = {defn.GetFieldDefn(i).GetName(): i for i in range(defn.GetFieldCount())}
+        self.defn = self.layer.GetLayerDefn()
+        self.idx = {self.defn.GetFieldDefn(i).GetName(): i for i in range(self.defn.GetFieldCount())}
 
     def write(self, pilots: List[Pilot], timestamp: str) -> int:
-        """Insert one snapshot in a single transaction. Returns the number of rows written."""
+        """Record one snapshot. Returns the number of new rows written."""
         self._count += 1
         if (self._count - 1) % self.record_every_n != 0:
-            self.last_skipped = 0
+            self.last_extended = 0
             return 0
-
-        defn = self.layer.GetLayerDefn()
-        idx = self.idx
-        written = 0
-        skipped = 0
-        recorded = {}  # callsign -> state, remembered only if the transaction commits
-
-        t0 = time.perf_counter()
-        self.layer.StartTransaction()
-        t1 = time.perf_counter()
-        try:
-            for p in pilots:
-                record, state = self.filter.check(p)
-                if not record:
-                    skipped += 1
-                    continue
-                recorded[p.callsign] = state
-                feature = ogr.Feature(defn)
-                point = ogr.Geometry(ogr.wkbPoint25D)
-                point.AddPoint(p.longitude, p.latitude, p.altitude)
-                feature.SetGeometry(point)
-                feature.SetField(idx["callsign"], p.callsign)
-                feature.SetField(idx["cid"], p.cid)
-                feature.SetField(idx["heading"], p.heading)
-                feature.SetField(idx["groundspeed"], p.groundspeed)
-                feature.SetField(idx["departure"], p.departure)
-                feature.SetField(idx["arrival"], p.arrival)
-                feature.SetField(idx["aircraft"], p.aircraft)
-                feature.SetField(idx["timestamp"], timestamp)
-                self.layer.CreateFeature(feature)
-                written += 1
-            t2 = time.perf_counter()
-            self.layer.CommitTransaction()
-            self.last_timing = (t1 - t0, t2 - t1, time.perf_counter() - t2)
-        except Exception:
-            self.layer.RollbackTransaction()
-            raise
-
-        self.filter.commit(recorded, {p.callsign for p in pilots})
-        self.last_skipped = skipped
-        return written
+        stats = write_snapshot(self.ds, self.layer, self.defn, self.idx, self.filter, pilots, timestamp)
+        self.last_extended = stats["extended"]
+        self.last_timing = (stats["begin"], stats["insert"], stats["commit"])
+        return stats["written"]
 
     def close(self):
         self.layer = None
@@ -316,5 +277,5 @@ class HistoryWriter:
         return self._impl.last_timing if self.in_process else None
 
     @property
-    def last_skipped(self) -> int:
-        return self._impl.last_skipped if self.in_process else 0
+    def last_extended(self) -> int:
+        return self._impl.last_extended if self.in_process else 0

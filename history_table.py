@@ -7,7 +7,12 @@ import os
 
 from osgeo import ogr, osr
 
-# (name, OGR type, width) - the same columns the plugin has always recorded
+LAST_SEEN = "last_seen"
+
+# (name, OGR type, width). `timestamp` is when a row starts and `last_seen` the last time the
+# aircraft was still observed in that state. They are equal for a moving aircraft; for a
+# stationary one `last_seen` is pushed forward while nothing changes, so last_seen - timestamp
+# is how long it stayed there.
 FIELDS = [
     ("callsign", ogr.OFTString, 9),
     ("cid", ogr.OFTInteger, 0),
@@ -17,11 +22,13 @@ FIELDS = [
     ("arrival", ogr.OFTString, 4),
     ("aircraft", ogr.OFTString, 8),
     ("timestamp", ogr.OFTDateTime, 0),
+    (LAST_SEEN, ogr.OFTDateTime, 0),
 ]
 
 
 def open_history_layer(gpkg_path: str, table_name: str):
-    """Open the history table for writing, creating the GeoPackage and/or the table if needed.
+    """Open the history table for writing, creating the GeoPackage and/or the table if needed,
+    and adding any columns an older table is missing (such as last_seen).
 
     Returns (dataset, layer). Keep a reference to the dataset for as long as the layer is used.
     """
@@ -42,7 +49,10 @@ def open_history_layer(gpkg_path: str, table_name: str):
         layer = ds.CreateLayer(table_name, srs, ogr.wkbPoint25D)
         if layer is None:
             raise RuntimeError(f"could not create the table '{table_name}'")
-        for name, ogr_type, width in FIELDS:
+
+    defn = layer.GetLayerDefn()
+    for name, ogr_type, width in FIELDS:
+        if defn.GetFieldIndex(name) < 0:
             field = ogr.FieldDefn(name, ogr_type)
             if width:
                 field.SetWidth(width)

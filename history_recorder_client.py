@@ -79,7 +79,7 @@ class RecorderProcessClient:
         self._dead = False
         self._reported_dead = False
         self._noise_lines = 0
-        self.last_skipped = 0
+        self.last_extended = 0  # unchanged stationary records extended by the last write
         self.last_timing = None  # (begin, insert, commit) of the most recent write, in seconds
 
     def _say(self, message: str, critical: bool = False):
@@ -126,13 +126,13 @@ class RecorderProcessClient:
                 if kind == "ready":
                     self._ready.set()
                 elif kind == "stats":
-                    self.last_skipped = message.get("skipped", 0)
+                    self.last_extended = message.get("extended", 0)
                     self.last_timing = (message.get("begin", 0), message.get("insert", 0),
                                         message.get("commit", 0))
                     if self.verbose:
                         begin, insert, commit = self.last_timing
-                        self._say(f"history recorder (separate process): {message.get('written', 0)} rows, "
-                                  f"{self.last_skipped} unchanged skipped "
+                        self._say(f"history recorder (separate process): {message.get('written', 0)} new rows, "
+                                  f"{self.last_extended} unchanged records extended "
                                   f"[begin {1000 * begin:.0f} / insert {1000 * insert:.0f} / "
                                   f"commit {1000 * commit:.0f} ms]")
                 elif kind == "error":
