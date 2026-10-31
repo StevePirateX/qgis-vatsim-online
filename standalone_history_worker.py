@@ -114,16 +114,22 @@ def main():
         print(f"{datetime.now():%H:%M:%S} - ", end="")
         try:
             vatsim_data.fetch_vatsim_data()
-            if vatsim_data.timestamp == last_update:
-                print("no new VATSIM data yet. ", end="")   # the feed only changes about every 15 s
-            else:
-                pilots = vatsim_data.pilots
+            wait_time = 5
+            while vatsim_data.timestamp == last_update:
+                print(
+                    f"Data {vatsim_data.timestamp:%H:%M:%S} | No new VATSIM data yet. Sleeping for {wait_time} secs.")  # the feed only changes about every 15 s
+                time.sleep(wait_time)
+                print(f"{datetime.now():%H:%M:%S} - ", end="")
+                vatsim_data.fetch_vatsim_data()
+                cycle_start = time.time()
+
+            pilots = vatsim_data.pilots
                 # opens today's file (creating it, and switching files when the day changes)
-                stats = history.write(pilots, vatsim_data.get_update_time())
-                last_update = vatsim_data.timestamp
-                print(f"Data {vatsim_data.timestamp:%H:%M:%S}  |  {len(pilots)} pilots  |  "
-                      f"{stats['written']} new rows, {stats['extended']} unchanged extended  |  "
-                      f"Runtime: {time.time() - cycle_start:.2f} secs. ", end="")
+            stats = history.write(pilots, vatsim_data.get_update_time())
+            last_update = vatsim_data.timestamp
+            print(f"Data {vatsim_data.timestamp:%H:%M:%S}  |  {len(pilots)} pilots  |  "
+                  f"{stats['written']} new rows, {stats['extended']} unchanged extended  |  "
+                  f"Runtime: {time.time() - cycle_start:.2f} secs. ", end="")
         except Exception as e:
             # Log the error and carry on - don't crash the loop. The file is reopened on the
             # next write in case it went away (e.g. a drive was unmounted).
