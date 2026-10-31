@@ -1,17 +1,32 @@
-"""Standalone VATSIM history recorder: records to the history GeoPackage without opening QGIS.
+"""Standalone VATSIM history recorder: records to daily history files without opening QGIS.
 
 It shares its code with the plugin, so the two always agree on:
-  * the table layout and how the GeoPackage is created      (history_table.py)
+  * the daily file names and where they go                  (history_files.py)
+  * the table layout and how a GeoPackage is created        (history_table.py)
   * which aircraft get a new row - a stationary aircraft gets one row, whose last_seen time
     is pushed forward while nothing changes                 (stationary_filter.py)
-  * how a snapshot is written                               (history_recorder.py)
+  * how a snapshot is written, the switch to a new file when
+    the day changes, and converting the finished day to
+    GeoParquet                                              (history_recorder.py,
+                                                             geoparquet_handler.py)
 Only the loop, the settings and the VATSIM download live here.
 
-Settings come from the plugin's .env file:
-    VATSIM_DATA_URL, GPKG_PATH, TABLE_NAME
-    RECORD_INTERVAL_SECS   (optional, default 15)
+One GeoPackage is written per day: <folder>/<base name>-YYYY-MM-DD.gpkg. When the day is over it
+is converted to GeoParquet (<base name>-YYYY-MM-DD.parquet) on a background thread, and the
+GeoPackage is removed once the conversion has been checked. Older days left unconverted (for
+example because this wasn't running at midnight) are converted when it starts.
 
-Run it with a Python that has GDAL (osgeo), requests and python-dotenv. Ctrl+C stops it cleanly.
+Settings come from the plugin's .env file:
+    VATSIM_DATA_URL
+    GPKG_PATH              where to record. A file such as /data/vatsim-history.gpkg means the
+                           folder /data and the base name "vatsim-history"; a folder uses the
+                           default base name. (Same meaning as the plugin's history file box.)
+    TABLE_NAME
+    RECORD_INTERVAL_SECS   (optional, default 15)
+    CONVERT_TO_GEOPARQUET  (optional, default 1; 0 keeps the daily GeoPackages as they are)
+
+Run it with a Python that has GDAL (osgeo), requests, python-dotenv and geoparquet-io.
+Ctrl+C stops it cleanly (press it again to quit immediately).
 """
 import os
 import signal
@@ -42,10 +57,9 @@ package.__path__ = [str(plugin_root)]
 package.__file__ = str(plugin_root / "__init__.py")
 sys.modules["vatsim_plugin"] = package
 
-from vatsim_plugin.vatsim_data import VatsimData                # noqa: E402
-from history_table import open_history_layer                    # noqa: E402
-from history_recorder import write_snapshot, configure_sqlite   # noqa: E402
-from stationary_filter import StationaryFilter                  # noqa: E402
+from vatsim_plugin.vatsim_data import VatsimData                 # noqa: E402
+from history_files import resolve_base                           # noqa: E402
+from history_recorder import DailyHistory, configure_sqlite      # noqa: E402
 
 # --- Settings
 load_dotenv(plugin_root / ".env")
@@ -53,6 +67,7 @@ VATSIM_DATA_URL = os.getenv("VATSIM_DATA_URL")
 GPKG_PATH = os.getenv("GPKG_PATH")
 TABLE_NAME = os.getenv("TABLE_NAME")
 INTERVAL_SECS = float(os.getenv("RECORD_INTERVAL_SECS", 15))
+CONVERT_TO_GEOPARQUET = os.getenv("CONVERT_TO_GEOPARQUET", "1") != "0"
 
 if not GPKG_PATH or not TABLE_NAME:
     raise ValueError("GPKG_PATH and TABLE_NAME must be set in .env")
@@ -63,8 +78,11 @@ stop_requested = False
 
 def request_stop(signum, frame):
     global stop_requested
+    if stop_requested:
+        print("\nQuitting immediately.")
+        sys.exit(1)
     stop_requested = True
-    print("\nStopping after the current cycle...")
+    print("\nStopping after the current cycle (press Ctrl+C again to quit immediately)...")
 
 
 signal.signal(signal.SIGINT, request_stop)
@@ -72,48 +90,45 @@ if hasattr(signal, "SIGTERM"):
     signal.signal(signal.SIGTERM, request_stop)
 
 
+def log(message: str, critical: bool = False):
+    """Progress and errors from the history code (including the conversion thread)."""
+    print(f"\n{'ERROR: ' if critical else ''}{message}", file=sys.stderr if critical else sys.stdout)
+
+
 def main():
     configure_sqlite(wal=True, synchronous="NORMAL")
     vatsim_data = VatsimData(VATSIM_DATA_URL) if VATSIM_DATA_URL else VatsimData()
-    stationary_filter = StationaryFilter()   # same rules and defaults as the plugin
 
-    ds = layer = defn = idx = None
+    folder, base_name = resolve_base(GPKG_PATH, default_folder=os.getcwd())
+    history = DailyHistory(folder, base_name, TABLE_NAME, convert=CONVERT_TO_GEOPARQUET, log=log)
     last_update = None
 
-    print(f"Recording VATSIM data to {GPKG_PATH} (table '{TABLE_NAME}'), every {INTERVAL_SECS:g} seconds.")
+    print(f"Recording VATSIM data to daily files in {folder} ({base_name}-YYYY-MM-DD.gpkg, table "
+          f"'{TABLE_NAME}'), every {INTERVAL_SECS:g} seconds.")
+    print("Finished days are converted to GeoParquet." if CONVERT_TO_GEOPARQUET
+          else "Finished days are kept as GeoPackages (CONVERT_TO_GEOPARQUET=0).")
     print("Press Ctrl+C to stop.")
 
     while not stop_requested:
         cycle_start = time.time()
         print(f"{datetime.now():%H:%M:%S} - ", end="")
         try:
-            if layer is None:
-                # creates the GeoPackage and table if they don't exist yet
-                ds, layer = open_history_layer(GPKG_PATH, TABLE_NAME)
-                defn = layer.GetLayerDefn()
-                idx = {defn.GetFieldDefn(i).GetName(): i for i in range(defn.GetFieldCount())}
-
             vatsim_data.fetch_vatsim_data()
-            wait_time = 5
-            while vatsim_data.timestamp == last_update:
-                print(f"Data {vatsim_data.timestamp:%H:%M:%S} - No new VATSIM data yet. Sleeping for {wait_time} secs.")   # the feed only changes about every 15 s
-                time.sleep(wait_time)
-                print(f"{datetime.now():%H:%M:%S} - ", end="")
-                vatsim_data.fetch_vatsim_data()
-                cycle_start = time.time()
-
-            pilots = vatsim_data.pilots
-            stats = write_snapshot(ds, layer, defn, idx, stationary_filter, pilots,
-                                   vatsim_data.get_update_time())
-            last_update = vatsim_data.timestamp
-            print(f"Data {vatsim_data.timestamp:%H:%M:%S}  |  {len(pilots)} pilots  |  "
-                  f"{stats['written']} new rows, {stats['extended']} unchanged extended  |  "
-                  f"Runtime: {time.time() - cycle_start:.2f} secs. ", end="")
+            if vatsim_data.timestamp == last_update:
+                print("no new VATSIM data yet. ", end="")   # the feed only changes about every 15 s
+            else:
+                pilots = vatsim_data.pilots
+                # opens today's file (creating it, and switching files when the day changes)
+                stats = history.write(pilots, vatsim_data.get_update_time())
+                last_update = vatsim_data.timestamp
+                print(f"Data {vatsim_data.timestamp:%H:%M:%S}  |  {len(pilots)} pilots  |  "
+                      f"{stats['written']} new rows, {stats['extended']} unchanged extended  |  "
+                      f"Runtime: {time.time() - cycle_start:.2f} secs. ", end="")
         except Exception as e:
-            # Log the error and carry on - don't crash the loop. Reopen the file next cycle
-            # in case it went away (e.g. a drive was unmounted).
+            # Log the error and carry on - don't crash the loop. The file is reopened on the
+            # next write in case it went away (e.g. a drive was unmounted).
             print(f"Error during cycle: {e}", file=sys.stderr)
-            ds = layer = None
+            history.reset()
 
         sleep_time = max(0.0, INTERVAL_SECS - (time.time() - cycle_start))
         print(f"Sleeping for {sleep_time:.2f} secs")
@@ -121,7 +136,7 @@ def main():
         while not stop_requested and time.time() < wake_at:
             time.sleep(min(0.25, max(0.0, wake_at - time.time())))
 
-    layer = ds = None  # closing the dataset flushes everything to disk
+    history.close(wait_for_conversion=True)  # closes the file; lets a running conversion finish
     print("Stopped.")
 
 

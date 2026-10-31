@@ -123,7 +123,8 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # plain OGR connection that lives entirely inside the worker thread.
         history_writer = None
         if self.history_layer is not None:
-            history_writer = HistoryWriter(self.history_layer.gpkg_path,
+            history_writer = HistoryWriter(self.history_layer.folder,
+                                           self.history_layer.base_name,
                                            self.history_layer.table_name)
 
         self.update_thread = VatsimUpdateThread(
@@ -164,8 +165,10 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if self.history_layer is not None:
             self._log_message(
-                f"History is saved in {self.history_layer.gpkg_path}. It is not loaded into QGIS "
-                f"while recording; add it with Layer > Add Layer when you want to view it.",
+                f"History is saved in {self.history_layer.folder} as daily GeoPackages "
+                f"({self.history_layer.base_name}-YYYY-MM-DD.gpkg); each finished day is converted to "
+                f"GeoParquet. Today's file is not loaded into QGIS while recording; add it with "
+                f"Layer > Add Layer when you want to view it.",
                 Qgis.MessageLevel.Info)
 
         # Reset UI. The "VATSIM Data" layer stays in the project, showing the last data received.
@@ -223,7 +226,7 @@ class VatsimOnlineDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnGetData.setStyleSheet(button_style)
 
         if self.history_be_recorded() and self.is_updating:
-            self.history_layer = HistoryLayer(gpkg_path=self.mHistoryFile.filePath())
+            self.history_layer = HistoryLayer(history_path=self.mHistoryFile.filePath())
             # QGIS must not hold the file the recorder is writing, or the window can stall
             removed = self.history_layer.unload_from_project()
             if removed:

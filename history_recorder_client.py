@@ -63,10 +63,12 @@ def find_python_with_gdal():
 class RecorderProcessClient:
     """Sends pilot snapshots to the recorder process. write() never waits for the database."""
 
-    def __init__(self, gpkg_path, table_name, max_groundspeed, move_tolerance_m, record_every_n=1,
-                 use_wal=True, synchronous="NORMAL", log=None, verbose=False):
-        self.gpkg_path = gpkg_path
+    def __init__(self, folder, base_name, table_name, max_groundspeed, move_tolerance_m, record_every_n=1,
+                 use_wal=True, synchronous="NORMAL", convert=True, log=None, verbose=False):
+        self.folder = folder
+        self.base_name = base_name
         self.table_name = table_name
+        self.convert = convert
         self.max_groundspeed = max_groundspeed
         self.move_tolerance_m = move_tolerance_m
         self.record_every_n = record_every_n
@@ -91,12 +93,13 @@ class RecorderProcessClient:
         if python is None:
             raise RecorderUnavailable("no Python installation with GDAL (osgeo) was found")
         command = [python, HELPER_SCRIPT,
-                   "--gpkg", self.gpkg_path, "--table", self.table_name,
+                   "--folder", self.folder, "--base", self.base_name, "--table", self.table_name,
                    "--max-speed", str(self.max_groundspeed),
                    "--tolerance", str(self.move_tolerance_m),
                    "--every", str(self.record_every_n),
                    "--wal", "1" if self.use_wal else "0",
-                   "--sync", self.synchronous or ""]
+                   "--sync", self.synchronous or "",
+                   "--convert", "1" if self.convert else "0"]
         try:
             self._proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT, text=True, encoding="utf-8",
@@ -135,6 +138,8 @@ class RecorderProcessClient:
                                   f"{self.last_extended} unchanged records extended "
                                   f"[begin {1000 * begin:.0f} / insert {1000 * insert:.0f} / "
                                   f"commit {1000 * commit:.0f} ms]")
+                elif kind == "log":  # e.g. progress of a GeoParquet conversion
+                    self._say(message.get("message", ""))
                 elif kind == "error":
                     self._say(message.get("message", "history recorder error"), critical=True)
         finally:
@@ -161,8 +166,8 @@ class RecorderProcessClient:
         return 0
 
     def close(self):
-        """Ask the recorder to finish and exit. Does not wait: a final slow write carries on in
-        the background without holding anything up."""
+        """Ask the recorder to finish and exit. Does not wait: a final slow write or a GeoParquet
+        conversion carries on in the background without holding anything up."""
         proc, self._proc = self._proc, None
         if proc is None:
             return
@@ -176,7 +181,7 @@ class RecorderProcessClient:
     @staticmethod
     def _reap(proc):
         try:
-            proc.wait(timeout=300)  # allow a slow final write
+            proc.wait(timeout=3600)  # allow a slow final write or a GeoParquet conversion
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
